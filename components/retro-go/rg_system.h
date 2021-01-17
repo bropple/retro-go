@@ -23,6 +23,10 @@
 #include "rg_profiler.h"
 #include "rg_settings.h"
 
+//DS3231M Includes, requires I2C
+#include "rg_ds3231.h"
+#include "rg_i2cdev.h"
+
 typedef bool (*state_handler_t)(char *pathName);
 
 typedef struct

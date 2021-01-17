@@ -270,6 +270,16 @@ void app_main(void)
 
     emulators_init();
     favorites_init();
+    
+    //this will initialize the RTC every time the program powers on
+    //OR when an emulator is exited. Will only pop up if there's a problem.
+    i2c_dev_t dev;
+    if (ds3231_init_desc(&dev, I2C_NUM_0, 15, 4) != ESP_OK) {
+                rg_gui_alert("DS3231M", "RTC init FAIL");
+    }
+    else{
+                rg_gui_alert("DS3231M", "RTC init PASS");
+    }
 
     retro_loop();
 }
