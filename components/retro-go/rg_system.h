@@ -126,6 +126,9 @@ const char* rg_get_extension(const char *path);
 void *rg_alloc(size_t size, uint32_t caps);
 void rg_free(void *ptr);
 
+//DS3231M initialization function
+void rg_rtc_init(bool showInfo);
+
 #define MEM_ANY   (0)
 #define MEM_SLOW  (1)
 #define MEM_FAST  (2)

@@ -784,3 +784,38 @@ void rg_free(void *ptr)
 {
     return heap_caps_free(ptr);
 }
+
+void rg_rtc_init(bool showInfo)
+{
+    //this will initialize the DS3231M RTC every time the program powers on
+    //OR when an emulator is exited. Will only pop up if there's a problem.
+    //Will show RTC info in an alert window if argument is TRUE.
+    //Will not execute if the hardware RTC is disabled.
+    
+    float temp;
+    struct tm rtcinfo = { 0 };
+    i2c_dev_t dev;
+    if (ds3231_init_desc(&dev, I2C_NUM_0, 15, 4) != ESP_OK) {
+        rg_display_clear(C_RED);
+        rg_gui_alert("DS3231M", "RTC init FAIL");
+    }
+    
+    if(showInfo == true){
+        
+        if (ds3231_get_temp_float(&dev, &temp) != ESP_OK) {
+            rg_display_clear(C_RED);
+            rg_gui_alert("DS3231M", "Could not get temperature.");
+        }
+
+        if (ds3231_get_time(&dev, &rtcinfo) != ESP_OK) {
+            rg_display_clear(C_RED);
+            rg_gui_alert("DS3231M",  "Could not get time.");
+        }
+        
+        char message[36] = { 0 };
+        sprintf(message, "%04d/%02d/%02d %02d %02d %02d %.2f", rtcinfo.tm_year, rtcinfo.tm_mon + 1, rtcinfo.tm_mday, rtcinfo.tm_hour, rtcinfo.tm_min, rtcinfo.tm_sec, temp);
+        rg_display_clear(C_DARK_VIOLET);
+        rg_gui_alert("DS3231M",  message);
+        //should probably free the memory used by the message here...
+    }
+}
