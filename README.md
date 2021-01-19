@@ -120,7 +120,7 @@ For a smaller build you can also specify which apps you want, for example the la
 - [miniz](https://github.com/richgel999/miniz) For zipped ROM and zlib API
 - [luPng](https://github.com/jansol/LuPng) For basic PNG decoding
 - PCE cover art is from Christian_Haitian.
-- [nopnop2002's] https://github.com/nopnop2002/esp-idf-ds3231 for DS3231M library.
+- [nopnop2002's](https://github.com/nopnop2002/esp-idf-ds3231) for DS3231M library.
 
 
 # License
