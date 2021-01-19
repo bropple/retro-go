@@ -125,3 +125,23 @@ esp_err_t ds3231_get_time(i2c_dev_t *dev, struct tm *time)
 
     return ESP_OK;
 }
+
+uint16_t dayOfYear(uint16_t y, uint8_t m, uint8_t d) {
+    
+  //return number day in the year it is, needed for GB RTC
+  //enter the year, month, and day of month to get the overall day of year.
+    
+  uint8_t daysInMonth[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+  uint16_t doy = d;
+  
+  if( (y % 4 == 0 && y % 100 != 0 ) || (y % 4 == 0) )
+    {
+        daysInMonth[1] = 29; //Leap Year, Feb has 29 days instead of 28
+    }
+  
+    for(uint8_t i = 0; i < m - 1; i++){
+	    doy += daysInMonth[i];
+	}
+	
+  return doy; //return number of days
+}

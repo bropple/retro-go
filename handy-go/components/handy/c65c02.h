@@ -1803,28 +1803,28 @@ class C65C02
       // Answers value of the Processor Status register
       int PSR() const
       {
-         UBYTE PSR = 0x20;
-         if(mN) PSR|=0x80;
-         if(mV) PSR|=0x40;
-         if(mB) PSR|=0x10;
-         if(mD) PSR|=0x08;
-         if(mI) PSR|=0x04;
-         if(mZ) PSR|=0x02;
-         if(mC) PSR|=0x01;
-         return PSR;
+         UBYTE psr = 0x20;
+         if(mN) psr|=0x80;
+         if(mV) psr|=0x40;
+         if(mB) psr|=0x10;
+         if(mD) psr|=0x08;
+         if(mI) psr|=0x04;
+         if(mZ) psr|=0x02;
+         if(mC) psr|=0x01;
+         return psr;
       }
 
 
       // Change the processor flags to correspond to the given value
-      void PSR(int PSR)
+      void PSR(int psr)
       {
-         mN=PSR&0x80;
-         mV=PSR&0x40;
-         mB=PSR&0x10;
-         mD=PSR&0x08;
-         mI=PSR&0x04;
-         mZ=PSR&0x02;
-         mC=PSR&0x01;
+         mN=psr&0x80;
+         mV=psr&0x40;
+         mB=psr&0x10;
+         mD=psr&0x08;
+         mI=psr&0x04;
+         mZ=psr&0x02;
+         mC=psr&0x01;
       }
 
 };

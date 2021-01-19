@@ -816,6 +816,12 @@ void rg_rtc_init(bool showInfo)
         sprintf(message, "%04d/%02d/%02d %02d %02d %02d %.2f", rtcinfo.tm_year, rtcinfo.tm_mon + 1, rtcinfo.tm_mday, rtcinfo.tm_hour, rtcinfo.tm_min, rtcinfo.tm_sec, temp);
         rg_display_clear(C_DARK_VIOLET);
         rg_gui_alert("DS3231M",  message);
-        //should probably free the memory used by the message here...
+        
+        //message = "empty";
+        sprintf(message, "%03d", dayOfYear(rtcinfo.tm_year, rtcinfo.tm_mon + 1, rtcinfo.tm_mday));
+        rg_display_clear(C_DARK_VIOLET);
+        rg_gui_alert("DS3231M",  message);
+        
+        //should probably free the memory used by "message" here...
     }
 }

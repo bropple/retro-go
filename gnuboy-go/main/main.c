@@ -197,6 +197,37 @@ static inline void screen_blit(void)
     fb.ptr = currentUpdate->buffer;
 }
 
+void DS3231_InjectRTC(void){
+    
+    //this function 'hijacks' the RTC of the emulator once to overwrite the 
+    //DS3231's time values over the GB's. The emulator keeps it ticking on
+    //its own while it runs.
+    
+    //initialize RTC
+    struct tm rtcinfo = { 0 };
+    i2c_dev_t dev;
+    if (ds3231_init_desc(&dev, I2C_NUM_0, 15, 4) != ESP_OK) {
+        rg_display_clear(C_RED);
+        rg_gui_alert("DS3231M", "RTC init FAIL");
+    }
+    
+    if (ds3231_get_time(&dev, &rtcinfo) != ESP_OK) {
+            rg_display_clear(C_RED);
+            rg_gui_alert("DS3231M",  "Could not get time.");
+        }
+        
+    rtc.d = dayOfYear(rtcinfo.tm_year, rtcinfo.tm_mon + 1, rtcinfo.tm_mday);
+    rtc.h = rtcinfo.tm_hour;
+    rtc.m = rtcinfo.tm_min;
+    rtc.s = rtcinfo.tm_sec;
+    
+    char message[36] = { 0 };
+    sprintf(message, "%03d %02d %02d %02d", rtc.d, rtc.h, rtc.m, rtc.s);
+    rg_display_clear(C_BLUE);
+    rg_gui_alert("GB RTC Values",  message);
+    
+}
+
 void app_main(void)
 {
     rg_system_init(APP_ID, AUDIO_SAMPLE_RATE);
@@ -246,6 +277,8 @@ void app_main(void)
     {
         sram_load(sramFile);
     }
+    
+    DS3231_InjectRTC();
 
     while (true)
     {
