@@ -270,8 +270,6 @@ void app_main(void)
 
     emulators_init();
     favorites_init();
-    
-    rg_rtc_init(true);
 
     retro_loop();
 }

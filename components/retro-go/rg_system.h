@@ -89,7 +89,7 @@ typedef struct
     uint32_t idleTimeCPU1;
 } runtime_stats_t;
 
-void rg_system_init(int app_id, int sampleRate);
+i2c_dev_t rg_system_init(int app_id, int sampleRate); //needs to return i2c_dev_t to make the RTC struct available to the system. Doesn't need to be used for every emu...
 void rg_system_panic(const char *reason, const char *function, const char *file) __attribute__((noreturn));
 void rg_system_halt() __attribute__((noreturn));
 void rg_system_sleep() __attribute__((noreturn));
@@ -127,7 +127,9 @@ void *rg_alloc(size_t size, uint32_t caps);
 void rg_free(void *ptr);
 
 //DS3231M initialization function
-void rg_rtc_init(bool showInfo);
+i2c_dev_t rg_rtc_init(void);
+struct tm rg_rtc_getTime(i2c_dev_t dev);
+void rg_rtc_debug(struct tm rtcinfo);
 
 #define MEM_ANY   (0)
 #define MEM_SLOW  (1)

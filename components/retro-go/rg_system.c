@@ -38,6 +38,9 @@ typedef struct
     char file[256];
 } panic_trace_t;
 
+//I2C descriptor struct for the DS3231M RTC.
+//Will need to be referred to by an extern in other emulators.
+
 // This is a direct pointer to rtc slow ram which isn't cleared on
 // panic. We don't use this region so we can point anywhere in it.
 static panic_trace_t *panicTrace = (void *)0x50001000;
@@ -208,7 +211,7 @@ static void rg_gpio_init()
     gpio_set_level(RG_GPIO_DAC2, 0);
 }
 
-void rg_system_init(int appId, int sampleRate)
+i2c_dev_t rg_system_init(int appId, int sampleRate)
 {
     const esp_app_desc_t *app = esp_ota_get_app_description();
 
@@ -239,6 +242,10 @@ void rg_system_init(int appId, int sampleRate)
     rg_input_init();
     rg_audio_init(sampleRate);
     rg_display_init();
+    
+    //Start up external RTC
+    i2c_dev_t dev = rg_rtc_init();
+    rg_rtc_debug(rg_rtc_getTime(dev));
 
     if (esp_reset_reason() == ESP_RST_PANIC)
     {
@@ -281,6 +288,8 @@ void rg_system_init(int appId, int sampleRate)
     panicTrace->magicWord = 0;
 
     printf("%s: System ready!\n\n", __func__);
+    
+    return dev;
 }
 
 void rg_emu_init(state_handler_t load, state_handler_t save, netplay_callback_t netplay_cb)
@@ -785,43 +794,39 @@ void rg_free(void *ptr)
     return heap_caps_free(ptr);
 }
 
-void rg_rtc_init(bool showInfo)
+i2c_dev_t rg_rtc_init(void)
 {
     //this will initialize the DS3231M RTC every time the program powers on
     //OR when an emulator is exited. Will only pop up if there's a problem.
     //Will show RTC info in an alert window if argument is TRUE.
     //Will not execute if the hardware RTC is disabled.
     
-    float temp;
-    struct tm rtcinfo = { 0 };
     i2c_dev_t dev;
+    
     if (ds3231_init_desc(&dev, I2C_NUM_0, 15, 4) != ESP_OK) {
         rg_display_clear(C_RED);
         rg_gui_alert("DS3231M", "RTC init FAIL");
     }
     
-    if(showInfo == true){
-        
-        if (ds3231_get_temp_float(&dev, &temp) != ESP_OK) {
-            rg_display_clear(C_RED);
-            rg_gui_alert("DS3231M", "Could not get temperature.");
-        }
+    return dev;
+    
+}
 
-        if (ds3231_get_time(&dev, &rtcinfo) != ESP_OK) {
-            rg_display_clear(C_RED);
-            rg_gui_alert("DS3231M",  "Could not get time.");
-        }
-        
-        char message[36] = { 0 };
-        sprintf(message, "%04d/%02d/%02d %02d %02d %02d %.2f", rtcinfo.tm_year, rtcinfo.tm_mon + 1, rtcinfo.tm_mday, rtcinfo.tm_hour, rtcinfo.tm_min, rtcinfo.tm_sec, temp);
-        rg_display_clear(C_DARK_VIOLET);
-        rg_gui_alert("DS3231M",  message);
-        
-        //message = "empty";
-        sprintf(message, "%03d", dayOfYear(rtcinfo.tm_year, rtcinfo.tm_mon + 1, rtcinfo.tm_mday));
-        rg_display_clear(C_DARK_VIOLET);
-        rg_gui_alert("DS3231M",  message);
-        
-        //should probably free the memory used by "message" here...
+struct tm rg_rtc_getTime(i2c_dev_t dev)
+{
+    struct tm time = { 0 };
+    
+    if (ds3231_get_time(&dev, &time) != ESP_OK) {
+        rg_display_clear(C_RED);
+        rg_gui_alert("DS3231M",  "Could not get time.");
     }
+    return time;
+}
+
+void rg_rtc_debug(struct tm rtcinfo)
+{
+        char message[36] = { 0 };
+        sprintf(message, "%04d/%02d/%02d %02d %02d %02d %03d", rtcinfo.tm_year, rtcinfo.tm_mon + 1, rtcinfo.tm_mday, rtcinfo.tm_hour, rtcinfo.tm_min, rtcinfo.tm_sec, dayOfYear(rtcinfo.tm_year, rtcinfo.tm_mon + 1, rtcinfo.tm_mday));
+        rg_display_clear(C_DARK_VIOLET);
+        rg_gui_alert("DS3231M",  message);
 }
