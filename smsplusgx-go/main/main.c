@@ -166,7 +166,7 @@ void app_main(void)
 
     const long frameTime = get_frame_time(sms.display == DISPLAY_NTSC ? 60 : 50);
     bool fullFrame = false;
-
+    
     while (true)
     {
         *localJoystick = rg_input_read_gamepad();

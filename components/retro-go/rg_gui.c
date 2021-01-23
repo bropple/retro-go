@@ -615,6 +615,7 @@ static void draw_game_status_bar(runtime_stats_t stats)
     rg_gui_draw_text(0, pad_text, width, header, C_LIGHT_GRAY, C_BLACK);
     rg_gui_draw_text(0, RG_SCREEN_HEIGHT - height + pad_text, width, bottom, C_LIGHT_GRAY, C_BLACK);
     rg_gui_draw_battery(width - 26, 3);
+    
 }
 
 int rg_gui_game_settings_menu(dialog_choice_t *extra_options)
@@ -702,4 +703,15 @@ int rg_gui_game_menu(void)
     rg_audio_mute(false);
 
     return r;
+}
+
+void rg_gui_draw_time(struct tm time, int x_pos, int y_pos)
+{    
+    char timestr[72] = { 0 };
+    sprintf(timestr, "%02d/%02d/%04d %02d:%02d:%02d", time.tm_mon + 1, time.tm_mday, time.tm_year, time.tm_hour, time.tm_min, time.tm_sec);
+    
+    rg_gui_draw_text(x_pos, y_pos, RG_SCREEN_WIDTH, timestr, C_RED, C_TEAL);
+    
+    //rg_display_clear(C_DARK_VIOLET);
+    //rg_gui_alert("DS3231M",  timestr);
 }

@@ -112,7 +112,7 @@ static inline bool tab_enabled(tab_t *tab)
     return (disabled_tabs == gui.tabcount) || (tab->initialized && !tab->is_empty);
 }
 
-void retro_loop()
+void retro_loop(i2c_dev_t dev)
 {
     tab_t *tab = gui_get_current_tab();
     int debounce = 0;
@@ -258,18 +258,20 @@ void retro_loop()
         } else {
             gui.idle_counter++;
         }
-
+        
+        rg_gui_draw_time(rg_rtc_getTime(dev), 0, 0);
+        
         usleep(15 * 1000UL);
     }
 }
 
 void app_main(void)
 {
-    rg_system_init(0, 32000);
+    i2c_dev_t dev = rg_system_init(0, 32000);
     rg_display_clear(0);
 
     emulators_init();
     favorites_init();
-
-    retro_loop();
+    
+    retro_loop(dev);
 }

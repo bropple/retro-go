@@ -823,10 +823,19 @@ struct tm rg_rtc_getTime(i2c_dev_t dev)
     return time;
 }
 
+char * months_EN[13] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Err" }; //months in English
+
+char * rg_rtc_getMonth_text(int month)
+{
+    if(month < 12) return months_EN[month]; //return month in text form
+    else return months_EN[12]; //An error has occured
+}
+
 void rg_rtc_debug(struct tm rtcinfo)
 {
         char message[36] = { 0 };
         sprintf(message, "%04d/%02d/%02d %02d %02d %02d %03d", rtcinfo.tm_year, rtcinfo.tm_mon + 1, rtcinfo.tm_mday, rtcinfo.tm_hour, rtcinfo.tm_min, rtcinfo.tm_sec, dayOfYear(rtcinfo.tm_year, rtcinfo.tm_mon + 1, rtcinfo.tm_mday));
         rg_display_clear(C_DARK_VIOLET);
         rg_gui_alert("DS3231M",  message);
+        
 }

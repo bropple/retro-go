@@ -2,6 +2,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <time.h>
 
 typedef enum {
     RG_DIALOG_INIT,
@@ -217,3 +218,6 @@ void rg_gui_alert(const char *title, const char *message);
 int rg_gui_settings_menu(dialog_choice_t *extra_options);
 int rg_gui_game_settings_menu(dialog_choice_t *extra_options);
 int rg_gui_game_menu(void);
+
+//RTC functions
+void rg_gui_draw_time(struct tm time, int x_pos, int y_pos);

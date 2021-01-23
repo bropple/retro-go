@@ -1,6 +1,7 @@
 #pragma once
 
 #include <rg_input.h>
+#include <time.h>
 #include <stdbool.h>
 #include "emulators.h"
 
@@ -91,7 +92,7 @@ void gui_resize_list(tab_t *tab, int new_size);
 listbox_item_t *gui_get_selected_item(tab_t *tab);
 
 void gui_event(gui_event_t event, tab_t *tab);
-void gui_redraw(void);
+void gui_redraw();
 void gui_draw_navbar(void);
 void gui_draw_header(tab_t *tab);
 void gui_draw_status(tab_t *tab);

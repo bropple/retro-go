@@ -129,6 +129,7 @@ void rg_free(void *ptr);
 //DS3231M initialization function
 i2c_dev_t rg_rtc_init(void);
 struct tm rg_rtc_getTime(i2c_dev_t dev);
+char * rg_rtc_getMonth_text(int month);
 void rg_rtc_debug(struct tm rtcinfo);
 
 #define MEM_ANY   (0)
