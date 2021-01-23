@@ -259,7 +259,7 @@ void retro_loop(i2c_dev_t dev)
             gui.idle_counter++;
         }
         
-        rg_gui_draw_time(rg_rtc_getTime(dev), 0, 0);
+        rg_gui_draw_time(rg_rtc_getTime(dev), 58, 0);
         
         usleep(15 * 1000UL);
     }

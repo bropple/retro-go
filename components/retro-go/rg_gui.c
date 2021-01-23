@@ -710,7 +710,7 @@ void rg_gui_draw_time(struct tm time, int x_pos, int y_pos)
     char timestr[72] = { 0 };
     sprintf(timestr, "%02d/%02d/%04d %02d:%02d:%02d", time.tm_mon + 1, time.tm_mday, time.tm_year, time.tm_hour, time.tm_min, time.tm_sec);
     
-    rg_gui_draw_text(x_pos, y_pos, RG_SCREEN_WIDTH, timestr, C_RED, C_TEAL);
+    rg_gui_draw_text(x_pos, y_pos, 160, timestr, C_WHITE, C_BLACK);
     
     //rg_display_clear(C_DARK_VIOLET);
     //rg_gui_alert("DS3231M",  timestr);
