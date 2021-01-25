@@ -261,14 +261,14 @@ static inline void ASL8 (uint32 OpAddress)
 	SetZN(Work8);
 }
 
-static inline void BIT (uint16 Work16)
+static inline void BITT (uint16 Work16)
 {
 	ICPU._Overflow = (Work16 & 0x4000) != 0;
 	ICPU._Negative = (uint8) (Work16 >> 8);
 	ICPU._Zero = (Work16 & Registers.A.W) != 0;
 }
 
-static inline void BIT (uint8 Work8)
+static inline void BITT (uint8 Work8)
 {
 	ICPU._Overflow = (Work8 & 0x40) != 0;
 	ICPU._Negative = Work8;

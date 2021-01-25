@@ -252,7 +252,7 @@ i2c_dev_t rg_system_init(int appId, int sampleRate)
     
     //Start up external RTC
     i2c_dev_t dev = rg_rtc_init();
-    rg_rtc_debug(rg_rtc_getTime(dev));
+    //rg_rtc_debug(rg_rtc_getTime(dev));
 
     if (esp_reset_reason() == ESP_RST_PANIC)
     {
