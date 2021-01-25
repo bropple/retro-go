@@ -1,4 +1,5 @@
 #include <rg_system.h>
+#include <sys/time.h>
 #include <string.h>
 
 #include "../components/gnuboy/loader.h"
@@ -20,9 +21,8 @@
 
 static short audioBuffer[AUDIO_BUFFER_LENGTH * 2];
 
-static rg_video_frame_t update1 = {GB_WIDTH, GB_HEIGHT, GB_WIDTH * 2, 2, 0xFF, -1, NULL, NULL, 0, {}};
-static rg_video_frame_t update2 = {GB_WIDTH, GB_HEIGHT, GB_WIDTH * 2, 2, 0xFF, -1, NULL, NULL, 0, {}};
-static rg_video_frame_t *currentUpdate = &update1;
+static rg_video_frame_t frames[2];
+static rg_video_frame_t *currentUpdate = &frames[0];
 
 static rg_app_desc_t *app;
 
@@ -91,6 +91,9 @@ static bool LoadState(char *pathName)
 
         return false;
     }
+
+    // TO DO: Call rtc_sync() if a physical RTC is present
+
     return true;
 }
 
@@ -153,6 +156,9 @@ static bool rtc_t_update_cb(dialog_choice_t *option, dialog_event_t event)
         if (event == RG_DIALOG_NEXT && ++rtc.s > 59) rtc.s = 0;
         sprintf(option->value, "%02d", rtc.s);
     }
+
+    // TO DO: Update system clock
+
     return event == RG_DIALOG_ENTER;
 }
 
@@ -187,9 +193,9 @@ static bool advanced_settings_cb(dialog_choice_t *option, dialog_event_t event)
 
 static inline void screen_blit(void)
 {
-    rg_video_frame_t *previousUpdate = (currentUpdate == &update1) ? &update2 : &update1;
+    rg_video_frame_t *previousUpdate = &frames[currentUpdate == &frames[0]];
 
-    fullFrame = rg_display_queue_update(currentUpdate, previousUpdate) == SCREEN_UPDATE_FULL;
+    fullFrame = rg_display_queue_update(currentUpdate, previousUpdate) == RG_SCREEN_UPDATE_FULL;
 
     // swap buffers
     currentUpdate = previousUpdate;
@@ -223,8 +229,14 @@ void app_main(void)
 
     app = rg_system_get_app();
 
-    update1.buffer = rg_alloc(GB_WIDTH * GB_HEIGHT * 2, MEM_ANY);
-    update2.buffer = rg_alloc(GB_WIDTH * GB_HEIGHT * 2, MEM_ANY);
+    frames[0].flags = RG_PIXEL_565|RG_PIXEL_BE;
+    frames[0].width = GB_WIDTH;
+    frames[0].height = GB_HEIGHT;
+    frames[0].stride = GB_WIDTH * 2;
+    frames[1] = frames[0];
+
+    frames[0].buffer = rg_alloc(GB_WIDTH * GB_HEIGHT * 2, MEM_ANY);
+    frames[1].buffer = rg_alloc(GB_WIDTH * GB_HEIGHT * 2, MEM_ANY);
 
     saveSRAM = rg_settings_app_int32_get(NVS_KEY_SAVE_SRAM, 0);
     sramFile = rg_emu_get_path(EMU_PATH_SAVE_SRAM, 0);
@@ -232,16 +244,16 @@ void app_main(void)
     // Load ROM
     rom_load(app->romPath);
 
-    // RTC
-    memset(&rtc, 0, sizeof(rtc));
+    // Set palette for non-gbc games (must be after rom_load)
+    pal_set_dmg(rg_settings_Palette_get());
 
     // Video
     memset(&fb, 0, sizeof(fb));
-    fb.w = GB_WIDTH;
-    fb.h = GB_HEIGHT;
-    fb.format = GB_PIXEL_565_BE;
-    fb.pitch = update1.stride;
+    fb.w = currentUpdate->width;
+    fb.h = currentUpdate->height;
+    fb.pitch = currentUpdate->stride;
     fb.ptr = currentUpdate->buffer;
+    fb.format = GB_PIXEL_565_BE;
     fb.enabled = 1;
     fb.blit_func = &screen_blit;
 
@@ -254,8 +266,6 @@ void app_main(void)
     pcm.pos = 0;
 
     emu_init();
-
-    pal_set_dmg(rg_settings_Palette_get());
 
     if (app->startAction == EMU_START_ACTION_RESUME)
     {
