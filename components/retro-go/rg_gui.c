@@ -708,13 +708,44 @@ int rg_gui_game_menu(void)
     return r;
 }
 
-void rg_gui_draw_time(struct tm time, int x_pos, int y_pos)
-{    
-    char timestr[72] = { 0 };
-    sprintf(timestr, "%02d/%02d/%04d %02d:%02d:%02d", time.tm_mon + 1, time.tm_mday, time.tm_year, time.tm_hour, time.tm_min, time.tm_sec);
+char * ampm_text[2] = {"AM", "PM"};
+
+void rg_gui_draw_time(struct tm time, int x_pos, int y_pos, int format)
+{   
+    char time_buff[72] = { 0 };
+    int ampm = 2; //0 for am, 1 for pm, 2 for 24h
+    int time_width = 168;
+    int ampm_pos = 230;
+    int day_pos = 265;
     
-    rg_gui_draw_text(x_pos, y_pos, 160, timestr, C_WHITE, C_BLACK);
+    if(format == 3 || format == 4)
+    {
+        //These formats have AM and PM displayed at the end.
+        if(time.tm_hour > 12) 
+        {
+            time.tm_hour -= 12;
+            ampm = 1;
+        }
+        else ampm = 0;
+        if(time.tm_hour == 0) time.tm_hour = 12;
+
+    }
+    if(format == 2 || format == 4)
+    {
+        //These formats show month name instead of number, so we grab the text
+        char time_temp[36] = { 0 };
+        sprintf(time_temp,"%02d, %04d %02d:%02d:%02d", time.tm_mday, time.tm_year, time.tm_hour, time.tm_min, time.tm_sec);
+        strcpy(time_buff, rg_rtc_getMonth_text(time.tm_mon));
+        strcat(time_buff, time_temp);
+    }
     
-    //rg_display_clear(C_DARK_VIOLET);
-    //rg_gui_alert("DS3231M",  timestr);
+    if(format == 1 || format == 3) 
+    {
+        sprintf(time_buff, "%02d/%02d/%04d %02d:%02d:%02d", time.tm_mon + 1, time.tm_mday, time.tm_year, time.tm_hour, time.tm_min, time.tm_sec);
+    }
+    
+    rg_gui_draw_text(x_pos, y_pos, time_width, time_buff, C_WHITE, C_BLACK);
+    if(ampm < 2) rg_gui_draw_text(ampm_pos, y_pos, 16, ampm_text[ampm], C_WHITE, C_BLACK);
+    rg_gui_draw_text(day_pos, y_pos, 24, rg_rtc_getDay_text(time.tm_wday), C_WHITE, C_BLACK);
+
 }

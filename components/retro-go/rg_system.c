@@ -250,8 +250,12 @@ i2c_dev_t rg_system_init(int appId, int sampleRate)
     rg_audio_init(sampleRate);
     rg_display_init();
     
-    //Start up external RTC
-    i2c_dev_t dev = rg_rtc_init();
+    //Start up external RTC - must be enabled first.
+    i2c_dev_t dev;
+    if(rg_settings_int32_get("RTCstate", 0) > 0)
+    {
+        dev = rg_rtc_init();
+    }
     //rg_rtc_debug(rg_rtc_getTime(dev));
 
     if (esp_reset_reason() == ESP_RST_PANIC)
@@ -798,7 +802,8 @@ i2c_dev_t rg_rtc_init(void)
     
     if (ds3231_init_desc(&dev, I2C_NUM_0, 15, 4) != ESP_OK) {
         rg_display_clear(C_RED);
-        rg_gui_alert("DS3231M", "RTC init FAIL");
+        rg_gui_alert("DS3231M", "RTC init FAIL - Disabling.");
+        rg_settings_int32_set("RTCstate", 0);
     }
     
     return dev;
@@ -816,12 +821,20 @@ struct tm rg_rtc_getTime(i2c_dev_t dev)
     return time;
 }
 
-char * months_EN[13] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Err" }; //months in English
+char * months_EN[13] = {"Jan ", "Feb ", "Mar ", "Apr ", "May ", "Jun ", "Jul ", "Aug ", "Sep ", "Oct ", "Nov ", "Dec ", "Err " };
+
+char * days_EN[8] = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun", "Err"};
 
 char * rg_rtc_getMonth_text(int month)
 {
     if(month < 12) return months_EN[month]; //return month in text form
     else return months_EN[12]; //An error has occured
+}
+
+char * rg_rtc_getDay_text(int wday)
+{
+    if(wday < 7) return days_EN[wday]; //return day in text form
+    else return days_EN[7]; //An error has occured
 }
 
 void rg_rtc_debug(struct tm rtcinfo)

@@ -15,6 +15,9 @@
 #define KEY_SHOW_EMPTY    "ShowEmptyTabs"
 #define KEY_SHOW_PREVIEW  "ShowPreview"
 #define KEY_PREVIEW_SPEED "PreviewSpeed"
+#define KEY_RTC_STATE     "RTCstate"
+
+#define USE_CONFIG_FILE
 
 static bool font_size_cb(dialog_choice_t *option, dialog_event_t event)
 {
@@ -97,6 +100,27 @@ static bool color_shift_cb(dialog_choice_t *option, dialog_event_t event)
     return event == RG_DIALOG_ENTER;
 }
 
+static bool rtc_state_cb(dialog_choice_t *option, dialog_event_t event)
+{
+    /*  This setting determines whether or not the DS3231M RTC is
+     *  enabled, and if so, what format to display the date with
+     *  in the main menu.
+     */
+    
+    if (event == RG_DIALOG_PREV) {
+        if (--gui.rtc_state < 0) gui.rtc_state = 5;
+        rg_settings_int32_set(KEY_RTC_STATE, gui.rtc_state);
+    }
+    if (event == RG_DIALOG_NEXT) {
+        if (++gui.rtc_state > 5) gui.rtc_state = 0;
+        rg_settings_int32_set(KEY_RTC_STATE, gui.rtc_state);
+    }
+    const char *values[] = {"Off      ", "24h      ", "24h & mon", "12h      ", "12h & mon"};
+    strcpy(option->value, values[gui.rtc_state % 5]);
+    return event == RG_DIALOG_ENTER;
+}
+
+
 static inline bool tab_enabled(tab_t *tab)
 {
     int disabled_tabs = 0;
@@ -124,7 +148,9 @@ void retro_loop(i2c_dev_t dev)
     gui.show_empty   = rg_settings_int32_get(KEY_SHOW_EMPTY, 1);
     gui.show_preview = rg_settings_int32_get(KEY_SHOW_PREVIEW, 1);
     gui.show_preview_fast = rg_settings_int32_get(KEY_PREVIEW_SPEED, 0);
-
+    gui.rtc_state = rg_settings_int32_get(KEY_RTC_STATE, 0);
+    int last_rtc_state = gui.rtc_state;
+    
     while (true)
     {
         if (gui.selected != selected_tab_last)
@@ -220,6 +246,7 @@ void retro_loop(i2c_dev_t dev)
                     {0, "Preview    ", "...",  1, &show_preview_cb},
                     {0, "    - Delay", "...",  1, &show_preview_speed_cb},
                     {0, "Startup app", "...",  1, &startup_app_cb},
+                    {0, "DS3231M RTC", "...",  1, &rtc_state_cb},
                     RG_DIALOG_CHOICE_LAST
                 };
                 rg_gui_settings_menu(choices);
@@ -259,8 +286,17 @@ void retro_loop(i2c_dev_t dev)
             gui.idle_counter++;
         }
         
-        //Draw the time in the main menu
-        rg_gui_draw_time(rg_rtc_getTime(dev), 58, 0);
+        //Draw the time in the main menu, only if RTC is enabled
+        if(rg_settings_int32_get(KEY_RTC_STATE, gui.rtc_state) > 0)
+        {
+            rg_gui_draw_time(rg_rtc_getTime(dev), 58, 0, gui.rtc_state);
+        }
+        
+        if((last_rtc_state != gui.rtc_state) && last_rtc_state == 0)
+        {
+            //initialize the RTC if it isn't already -> requires reboot.
+            rg_system_restart();
+        }
         
         usleep(15 * 1000UL);
     }

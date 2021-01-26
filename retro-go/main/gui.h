@@ -69,6 +69,7 @@ typedef struct {
     int show_preview;
     int show_preview_fast;
     int idle_counter;
+    int rtc_state;
     int last_key;
     gamepad_state_t joystick;
 } retro_gui_t;
