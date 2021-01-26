@@ -721,7 +721,7 @@ void rg_gui_draw_time(struct tm time, int x_pos, int y_pos, int format)
     if(format == 3 || format == 4)
     {
         //These formats have AM and PM displayed at the end.
-        if(time.tm_hour > 12) 
+        if(time.tm_hour >= 12) 
         {
             time.tm_hour -= 12;
             ampm = 1;
