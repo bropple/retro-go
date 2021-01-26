@@ -2,7 +2,7 @@
 Retro-Go is a launcher and framework to run emulators on the ODROID-GO and compatible ESP32 devices. 
 It comes with many emulators!
 
-This fork includes support for the DS3231M I2C real-time clock chip. The date and time will be displayed in the main menu (TBD), and time will be synced with Game Boy Color games that use RTC functionality (Partial functionality).
+This fork includes support for the DS3231M I2C real-time clock chip. The date and time is displayed in the main menu with a few selectable formats, and time will be synced with Game Boy Color games that use RTC functionality (Partial functionality).
 
 ### Supported systems:
 - NES
@@ -16,7 +16,7 @@ This fork includes support for the DS3231M I2C real-time clock chip. The date an
 
 ### Retro-Go features:
 - In-game menu
-- Main-menu time display (TBD)
+- Main-menu time display
 - Favorites support
 - GB RTC adjust and save
 - GB DS3231M RTC syncrhonization (In progress)
