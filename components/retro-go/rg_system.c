@@ -252,7 +252,7 @@ i2c_dev_t rg_system_init(int appId, int sampleRate)
     
     //Start up external RTC - must be enabled first.
     i2c_dev_t dev;
-    if(rg_settings_int32_get("RTCstate", 0) > 0)
+    if(rg_settings_int32_get("RTCenable", 0) > 0)
     {
         dev = rg_rtc_init();
     }
@@ -821,7 +821,7 @@ struct tm rg_rtc_getTime(i2c_dev_t dev)
     return time;
 }
 
-char * months_EN[13] = {"Jan ", "Feb ", "Mar ", "Apr ", "May ", "Jun ", "Jul ", "Aug ", "Sep ", "Oct ", "Nov ", "Dec ", "Err " };
+char * months_EN[13] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Err" };
 
 char * days_EN[8] = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun", "Err"};
 

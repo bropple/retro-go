@@ -276,7 +276,7 @@ void app_main(void)
         sram_load(sramFile);
     }
     
-    if(rg_settings_int32_get("RTCstate", 0) > 0)
+    if(rg_settings_int32_get("RTCenable", 0) > 0)
     //if the RTC is enabled
     {
         DS3231_InjectRTC(dev); //replace gnuboy's RTC values with the DS3231's

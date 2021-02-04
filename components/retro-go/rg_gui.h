@@ -220,4 +220,4 @@ int rg_gui_game_settings_menu(dialog_choice_t *extra_options);
 int rg_gui_game_menu(void);
 
 //RTC functions
-void rg_gui_draw_time(struct tm time, int x_pos, int y_pos, int format);
+void rg_gui_draw_time(struct tm time, int x_pos, int y_pos, int format, int monthText, int hourPref);
