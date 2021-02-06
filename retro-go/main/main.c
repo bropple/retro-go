@@ -16,7 +16,6 @@
 #define KEY_SHOW_PREVIEW  "ShowPreview"
 #define KEY_PREVIEW_SPEED "PreviewSpeed"
 #define KEY_RTC_ENABLE    "RTCenable"
-//#define KEY_RTC_STATE     "RTCstate"
 #define KEY_RTC_FORMAT    "RTCformat"
 #define KEY_RTC_MONTH_TXT "RTCmonthText"
 #define KEY_RTC_HOUR_PREF "RTChourPref"
@@ -107,11 +106,11 @@ static bool color_shift_cb(dialog_choice_t *option, dialog_event_t event)
 static bool rtc_enable_cb(dialog_choice_t *option, dialog_event_t event)
 {
     if (event == RG_DIALOG_PREV) {
-        if (--gui.rtc_enable < 0) gui.rtc_enable = 2;
+        if (--gui.rtc_enable < 0) gui.rtc_enable = 1;
         rg_settings_int32_set(KEY_RTC_ENABLE, gui.rtc_enable);
     }
     if (event == RG_DIALOG_NEXT) {
-        if (++gui.rtc_enable > 2) gui.rtc_enable = 0;
+        if (++gui.rtc_enable > 1) gui.rtc_enable = 0;
         rg_settings_int32_set(KEY_RTC_ENABLE, gui.rtc_enable);
     }
     const char *values[] = {"Off", "On"};
@@ -122,11 +121,11 @@ static bool rtc_enable_cb(dialog_choice_t *option, dialog_event_t event)
 static bool rtc_format_cb(dialog_choice_t *option, dialog_event_t event)
 {
     if (event == RG_DIALOG_PREV) {
-        if (--gui.rtc_format < 0) gui.rtc_format = 3;
+        if (--gui.rtc_format < 0) gui.rtc_format = 2;
         rg_settings_int32_set(KEY_RTC_FORMAT, gui.rtc_format);
     }
     if (event == RG_DIALOG_NEXT) {
-        if (++gui.rtc_format > 3) gui.rtc_format = 0;
+        if (++gui.rtc_format > 2) gui.rtc_format = 0;
         rg_settings_int32_set(KEY_RTC_FORMAT, gui.rtc_format);
     }
     const char *values[] = {"MDY", "DMY", "YMD"};
@@ -137,11 +136,11 @@ static bool rtc_format_cb(dialog_choice_t *option, dialog_event_t event)
 static bool rtc_month_text_cb(dialog_choice_t *option, dialog_event_t event)
 {
     if (event == RG_DIALOG_PREV) {
-        if (--gui.rtc_month_text < 0) gui.rtc_month_text = 2;
+        if (--gui.rtc_month_text < 0) gui.rtc_month_text = 1;
         rg_settings_int32_set(KEY_RTC_MONTH_TXT, gui.rtc_month_text);
     }
     if (event == RG_DIALOG_NEXT) {
-        if (++gui.rtc_month_text > 2) gui.rtc_month_text = 0;
+        if (++gui.rtc_month_text > 1) gui.rtc_month_text = 0;
         rg_settings_int32_set(KEY_RTC_MONTH_TXT, gui.rtc_month_text);
     }
     const char *values[] = {"Off", "On"};
@@ -152,11 +151,11 @@ static bool rtc_month_text_cb(dialog_choice_t *option, dialog_event_t event)
 static bool rtc_hour_pref_cb(dialog_choice_t *option, dialog_event_t event)
 {
     if (event == RG_DIALOG_PREV) {
-        if (--gui.rtc_hour_pref < 0) gui.rtc_hour_pref = 2;
+        if (--gui.rtc_hour_pref < 0) gui.rtc_hour_pref = 1;
         rg_settings_int32_set(KEY_RTC_HOUR_PREF, gui.rtc_hour_pref);
     }
     if (event == RG_DIALOG_NEXT) {
-        if (++gui.rtc_hour_pref > 2) gui.rtc_hour_pref = 0;
+        if (++gui.rtc_hour_pref > 1) gui.rtc_hour_pref = 0;
         rg_settings_int32_set(KEY_RTC_HOUR_PREF, gui.rtc_hour_pref);
     }
     const char *values[] = {"12h", "24h"};
@@ -352,16 +351,16 @@ void retro_loop(i2c_dev_t dev)
             gui.idle_counter++;
         }
         
-        //Draw the time in the main menu, only if RTC is enabled
-        if(rg_settings_int32_get(KEY_RTC_ENABLE, gui.rtc_enable) > 0)
-        {
-            rg_gui_draw_time(rg_rtc_getTime(dev), 58, 0, gui.rtc_format, gui.rtc_month_text, gui.rtc_hour_pref);
-        }
-        
         if((last_rtc_enable != gui.rtc_enable) && last_rtc_enable == 0)
         {
             //initialize the RTC if it isn't already -> requires reboot.
             rg_system_restart();
+        }
+        
+        //Draw the time in the main menu, only if RTC is enabled
+        if(rg_settings_int32_get(KEY_RTC_ENABLE, gui.rtc_enable) > 0)
+        {
+            rg_gui_draw_time(rg_rtc_getTime(dev), 58, 0, gui.rtc_format, gui.rtc_month_text, gui.rtc_hour_pref);
         }
         
         usleep(15 * 1000UL);
