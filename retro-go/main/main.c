@@ -64,11 +64,11 @@ static bool startup_app_cb(dialog_choice_t *option, dialog_event_t event)
 static bool show_preview_cb(dialog_choice_t *option, dialog_event_t event)
 {
     if (event == RG_DIALOG_PREV) {
-        if (--gui.show_preview < 0) gui.show_preview = 5;
+        if (--gui.show_preview < 0) gui.show_preview = 4;
         rg_settings_int32_set(KEY_SHOW_PREVIEW, gui.show_preview);
     }
     if (event == RG_DIALOG_NEXT) {
-        if (++gui.show_preview > 5) gui.show_preview = 0;
+        if (++gui.show_preview > 4) gui.show_preview = 0;
         rg_settings_int32_set(KEY_SHOW_PREVIEW, gui.show_preview);
     }
     const char *values[] = {"None      ", "Cover,Save", "Save,Cover", "Cover     ", "Save      "};
@@ -105,16 +105,11 @@ static bool color_shift_cb(dialog_choice_t *option, dialog_event_t event)
 
 static bool rtc_enable_cb(dialog_choice_t *option, dialog_event_t event)
 {
-    if (event == RG_DIALOG_PREV) {
-        if (--gui.rtc_enable < 0) gui.rtc_enable = 1;
+if (event == RG_DIALOG_PREV || event == RG_DIALOG_NEXT) {
+        gui.rtc_enable = gui.rtc_enable ? 0 : 1;
         rg_settings_int32_set(KEY_RTC_ENABLE, gui.rtc_enable);
     }
-    if (event == RG_DIALOG_NEXT) {
-        if (++gui.rtc_enable > 1) gui.rtc_enable = 0;
-        rg_settings_int32_set(KEY_RTC_ENABLE, gui.rtc_enable);
-    }
-    const char *values[] = {"Off", "On"};
-    strcpy(option->value, values[gui.rtc_enable % 2]);
+    strcpy(option->value, gui.rtc_enable ? "On" : "Off");
     return event == RG_DIALOG_ENTER;
 }
 
@@ -135,31 +130,21 @@ static bool rtc_format_cb(dialog_choice_t *option, dialog_event_t event)
 
 static bool rtc_month_text_cb(dialog_choice_t *option, dialog_event_t event)
 {
-    if (event == RG_DIALOG_PREV) {
-        if (--gui.rtc_month_text < 0) gui.rtc_month_text = 1;
+    if (event == RG_DIALOG_PREV || event == RG_DIALOG_NEXT) {
+        gui.rtc_month_text = gui.rtc_month_text ? 0 : 1;
         rg_settings_int32_set(KEY_RTC_MONTH_TXT, gui.rtc_month_text);
     }
-    if (event == RG_DIALOG_NEXT) {
-        if (++gui.rtc_month_text > 1) gui.rtc_month_text = 0;
-        rg_settings_int32_set(KEY_RTC_MONTH_TXT, gui.rtc_month_text);
-    }
-    const char *values[] = {"Off", "On"};
-    strcpy(option->value, values[gui.rtc_month_text % 2]);
+    strcpy(option->value, gui.rtc_month_text ? "On" : "Off");
     return event == RG_DIALOG_ENTER;
 }
 
 static bool rtc_hour_pref_cb(dialog_choice_t *option, dialog_event_t event)
 {
-    if (event == RG_DIALOG_PREV) {
-        if (--gui.rtc_hour_pref < 0) gui.rtc_hour_pref = 1;
+    if (event == RG_DIALOG_PREV || event == RG_DIALOG_NEXT) {
+        gui.rtc_hour_pref = gui.rtc_hour_pref ? 0 : 1;
         rg_settings_int32_set(KEY_RTC_HOUR_PREF, gui.rtc_hour_pref);
     }
-    if (event == RG_DIALOG_NEXT) {
-        if (++gui.rtc_hour_pref > 1) gui.rtc_hour_pref = 0;
-        rg_settings_int32_set(KEY_RTC_HOUR_PREF, gui.rtc_hour_pref);
-    }
-    const char *values[] = {"12h", "24h"};
-    strcpy(option->value, values[gui.rtc_hour_pref % 2]);
+    strcpy(option->value, gui.rtc_hour_pref ? "24h" : "12h");
     return event == RG_DIALOG_ENTER;
 }
 
