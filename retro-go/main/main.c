@@ -15,6 +15,12 @@
 #define KEY_SHOW_EMPTY    "ShowEmptyTabs"
 #define KEY_SHOW_PREVIEW  "ShowPreview"
 #define KEY_PREVIEW_SPEED "PreviewSpeed"
+#define KEY_RTC_ENABLE    "RTCenable"
+#define KEY_RTC_FORMAT    "RTCformat"
+#define KEY_RTC_MONTH_TXT "RTCmonthText"
+#define KEY_RTC_HOUR_PREF "RTChourPref"
+
+#define USE_CONFIG_FILE
 
 static bool font_size_cb(dialog_choice_t *option, dialog_event_t event)
 {
@@ -58,11 +64,11 @@ static bool startup_app_cb(dialog_choice_t *option, dialog_event_t event)
 static bool show_preview_cb(dialog_choice_t *option, dialog_event_t event)
 {
     if (event == RG_DIALOG_PREV) {
-        if (--gui.show_preview < 0) gui.show_preview = 5;
+        if (--gui.show_preview < 0) gui.show_preview = 4;
         rg_settings_int32_set(KEY_SHOW_PREVIEW, gui.show_preview);
     }
     if (event == RG_DIALOG_NEXT) {
-        if (++gui.show_preview > 5) gui.show_preview = 0;
+        if (++gui.show_preview > 4) gui.show_preview = 0;
         rg_settings_int32_set(KEY_SHOW_PREVIEW, gui.show_preview);
     }
     const char *values[] = {"None      ", "Cover,Save", "Save,Cover", "Cover     ", "Save      "};
@@ -97,6 +103,68 @@ static bool color_shift_cb(dialog_choice_t *option, dialog_event_t event)
     return event == RG_DIALOG_ENTER;
 }
 
+static bool rtc_enable_cb(dialog_choice_t *option, dialog_event_t event)
+{
+if (event == RG_DIALOG_PREV || event == RG_DIALOG_NEXT) {
+        gui.rtc_enable = gui.rtc_enable ? 0 : 1;
+        rg_settings_int32_set(KEY_RTC_ENABLE, gui.rtc_enable);
+    }
+    strcpy(option->value, gui.rtc_enable ? "On" : "Off");
+    return event == RG_DIALOG_ENTER;
+}
+
+static bool rtc_format_cb(dialog_choice_t *option, dialog_event_t event)
+{
+    if (event == RG_DIALOG_PREV) {
+        if (--gui.rtc_format < 0) gui.rtc_format = 2;
+        rg_settings_int32_set(KEY_RTC_FORMAT, gui.rtc_format);
+    }
+    if (event == RG_DIALOG_NEXT) {
+        if (++gui.rtc_format > 2) gui.rtc_format = 0;
+        rg_settings_int32_set(KEY_RTC_FORMAT, gui.rtc_format);
+    }
+    const char *values[] = {"MDY", "DMY", "YMD"};
+    strcpy(option->value, values[gui.rtc_format % 3]);
+    return event == RG_DIALOG_ENTER;
+}
+
+static bool rtc_month_text_cb(dialog_choice_t *option, dialog_event_t event)
+{
+    if (event == RG_DIALOG_PREV || event == RG_DIALOG_NEXT) {
+        gui.rtc_month_text = gui.rtc_month_text ? 0 : 1;
+        rg_settings_int32_set(KEY_RTC_MONTH_TXT, gui.rtc_month_text);
+    }
+    strcpy(option->value, gui.rtc_month_text ? "On" : "Off");
+    return event == RG_DIALOG_ENTER;
+}
+
+static bool rtc_hour_pref_cb(dialog_choice_t *option, dialog_event_t event)
+{
+    if (event == RG_DIALOG_PREV || event == RG_DIALOG_NEXT) {
+        gui.rtc_hour_pref = gui.rtc_hour_pref ? 0 : 1;
+        rg_settings_int32_set(KEY_RTC_HOUR_PREF, gui.rtc_hour_pref);
+    }
+    strcpy(option->value, gui.rtc_hour_pref ? "24h" : "12h");
+    return event == RG_DIALOG_ENTER;
+}
+
+static bool rtc_state_cb(dialog_choice_t *option, dialog_event_t event)
+{
+
+    if (event == RG_DIALOG_ENTER) {
+        dialog_choice_t options[] = {
+            {200, "Master Enable", "...", 1, &rtc_enable_cb},
+            {201, "Date Format  ", "...", 1, &rtc_format_cb},
+            {202, "Month Text   ", "...", 1, &rtc_month_text_cb},
+            {203, "12h or 24h   ", "...", 1, &rtc_hour_pref_cb},
+            RG_DIALOG_CHOICE_LAST
+        };
+        rg_gui_dialog("DS3231M RTC Settings", options, 0);
+    }
+    return false;
+
+}
+
 static inline bool tab_enabled(tab_t *tab)
 {
     int disabled_tabs = 0;
@@ -112,7 +180,7 @@ static inline bool tab_enabled(tab_t *tab)
     return (disabled_tabs == gui.tabcount) || (tab->initialized && !tab->is_empty);
 }
 
-void retro_loop()
+void retro_loop(i2c_dev_t dev)
 {
     tab_t *tab = gui_get_current_tab();
     int debounce = 0;
@@ -124,7 +192,15 @@ void retro_loop()
     gui.show_empty   = rg_settings_int32_get(KEY_SHOW_EMPTY, 1);
     gui.show_preview = rg_settings_int32_get(KEY_SHOW_PREVIEW, 1);
     gui.show_preview_fast = rg_settings_int32_get(KEY_PREVIEW_SPEED, 0);
-
+    
+    //RTC variables
+    gui.rtc_enable = rg_settings_int32_get(KEY_RTC_ENABLE, 0);
+    gui.rtc_format = rg_settings_int32_get(KEY_RTC_FORMAT, 0);
+    gui.rtc_month_text = rg_settings_int32_get(KEY_RTC_MONTH_TXT, 0);
+    gui.rtc_hour_pref = rg_settings_int32_get(KEY_RTC_HOUR_PREF, 0);
+    
+    int last_rtc_enable = gui.rtc_enable;
+    
     while (true)
     {
         if (gui.selected != selected_tab_last)
@@ -220,6 +296,7 @@ void retro_loop()
                     {0, "Preview    ", "...",  1, &show_preview_cb},
                     {0, "    - Delay", "...",  1, &show_preview_speed_cb},
                     {0, "Startup app", "...",  1, &startup_app_cb},
+                    {0, "DS3231M RTC Settings", "",     1, &rtc_state_cb},
                     RG_DIALOG_CHOICE_LAST
                 };
                 rg_gui_settings_menu(choices);
@@ -258,18 +335,30 @@ void retro_loop()
         } else {
             gui.idle_counter++;
         }
-
+        
+        if((last_rtc_enable != gui.rtc_enable) && last_rtc_enable == 0)
+        {
+            //initialize the RTC if it isn't already -> requires reboot.
+            rg_system_restart();
+        }
+        
+        //Draw the time in the main menu, only if RTC is enabled
+        if(rg_settings_int32_get(KEY_RTC_ENABLE, gui.rtc_enable) > 0)
+        {
+            rg_gui_draw_time(rg_rtc_getTime(dev), 58, 0, gui.rtc_format, gui.rtc_month_text, gui.rtc_hour_pref);
+        }
+        
         usleep(15 * 1000UL);
     }
 }
 
 void app_main(void)
 {
-    rg_system_init(0, 32000);
+    i2c_dev_t dev = rg_system_init(0, 32000);
     rg_display_clear(0);
 
     emulators_init();
     favorites_init();
-
-    retro_loop();
+    
+    retro_loop(dev);
 }

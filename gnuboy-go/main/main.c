@@ -38,7 +38,6 @@ static bool netplay = false;
 #endif
 // --- MAIN
 
-
 static void netplay_callback(netplay_event_t event, void *arg)
 {
 #ifdef ENABLE_NETPLAY
@@ -203,9 +202,29 @@ static inline void screen_blit(void)
     fb.ptr = currentUpdate->buffer;
 }
 
+void DS3231_InjectRTC(i2c_dev_t dev){
+    
+    //this function 'hijacks' the RTC of the emulator once to overwrite the 
+    //DS3231's time values over the GB's. The emulator keeps it ticking on
+    //its own while it runs.
+    
+    struct tm rtcinfo = rg_rtc_getTime(dev);
+    
+    rtc.d = dayOfYear(rtcinfo.tm_year, rtcinfo.tm_mon + 1, rtcinfo.tm_mday);
+    rtc.h = rtcinfo.tm_hour;
+    rtc.m = rtcinfo.tm_min;
+    rtc.s = rtcinfo.tm_sec;
+    
+    char message[36] = { 0 };
+    sprintf(message, "%03d %02d %02d %02d", rtc.d, rtc.h, rtc.m, rtc.s);
+    rg_display_clear(C_BLUE);
+    rg_gui_alert("GB RTC Values",  message);
+    
+}
+
 void app_main(void)
 {
-    rg_system_init(APP_ID, AUDIO_SAMPLE_RATE);
+    i2c_dev_t dev = rg_system_init(APP_ID, AUDIO_SAMPLE_RATE);
     rg_emu_init(&LoadState, &SaveState, &netplay_callback);
 
     app = rg_system_get_app();
@@ -256,7 +275,12 @@ void app_main(void)
     {
         sram_load(sramFile);
     }
-
+    
+    if(rg_settings_int32_get("RTCenable", 0) > 0)
+    //if the RTC is enabled
+    {
+        DS3231_InjectRTC(dev); //replace gnuboy's RTC values with the DS3231's
+    }
     while (true)
     {
         gamepad_state_t joystick = rg_input_read_gamepad();

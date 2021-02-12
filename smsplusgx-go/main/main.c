@@ -167,7 +167,7 @@ void app_main(void)
 
     long frameTime = get_frame_time(refreshRate);
     bool fullFrame = false;
-
+    
     while (true)
     {
         *localJoystick = rg_input_read_gamepad();

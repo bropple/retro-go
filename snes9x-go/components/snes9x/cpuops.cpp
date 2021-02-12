@@ -281,24 +281,24 @@ static void Op89Slow (void)
 		ICPU._Zero = (Registers.A.W & Immediate16Slow(READ)) != 0;
 }
 
-rOP8 (24M1,     Direct,                           WRAP_BANK, BIT)
-rOP16(24M0,     Direct,                           WRAP_BANK, BIT)
-rOPM (24Slow,   DirectSlow,                       WRAP_BANK, BIT)
+rOP8 (24M1,     Direct,                           WRAP_BANK, BITT)
+rOP16(24M0,     Direct,                           WRAP_BANK, BITT)
+rOPM (24Slow,   DirectSlow,                       WRAP_BANK, BITT)
 
-rOP8 (34E1,     DirectIndexedXE1,                 WRAP_BANK, BIT)
-rOP8 (34E0M1,   DirectIndexedXE0,                 WRAP_BANK, BIT)
-rOP16(34E0M0,   DirectIndexedXE0,                 WRAP_BANK, BIT)
-rOPM (34Slow,   DirectIndexedXSlow,               WRAP_BANK, BIT)
+rOP8 (34E1,     DirectIndexedXE1,                 WRAP_BANK, BITT)
+rOP8 (34E0M1,   DirectIndexedXE0,                 WRAP_BANK, BITT)
+rOP16(34E0M0,   DirectIndexedXE0,                 WRAP_BANK, BITT)
+rOPM (34Slow,   DirectIndexedXSlow,               WRAP_BANK, BITT)
 
-rOP8 (2CM1,     Absolute,                         WRAP_NONE, BIT)
-rOP16(2CM0,     Absolute,                         WRAP_NONE, BIT)
-rOPM (2CSlow,   AbsoluteSlow,                     WRAP_NONE, BIT)
+rOP8 (2CM1,     Absolute,                         WRAP_NONE, BITT)
+rOP16(2CM0,     Absolute,                         WRAP_NONE, BITT)
+rOPM (2CSlow,   AbsoluteSlow,                     WRAP_NONE, BITT)
 
-rOP8 (3CM1X1,   AbsoluteIndexedXX1,               WRAP_NONE, BIT)
-rOP16(3CM0X1,   AbsoluteIndexedXX1,               WRAP_NONE, BIT)
-rOP8 (3CM1X0,   AbsoluteIndexedXX0,               WRAP_NONE, BIT)
-rOP16(3CM0X0,   AbsoluteIndexedXX0,               WRAP_NONE, BIT)
-rOPM (3CSlow,   AbsoluteIndexedXSlow,             WRAP_NONE, BIT)
+rOP8 (3CM1X1,   AbsoluteIndexedXX1,               WRAP_NONE, BITT)
+rOP16(3CM0X1,   AbsoluteIndexedXX1,               WRAP_NONE, BITT)
+rOP8 (3CM1X0,   AbsoluteIndexedXX0,               WRAP_NONE, BITT)
+rOP16(3CM0X0,   AbsoluteIndexedXX0,               WRAP_NONE, BITT)
+rOPM (3CSlow,   AbsoluteIndexedXSlow,             WRAP_NONE, BITT)
 
 /* CMP ********************************************************************* */
 

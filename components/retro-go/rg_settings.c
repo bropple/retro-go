@@ -14,7 +14,7 @@ static const char* Key_AudioSink    = "AudioSink";
 static const char* Key_Volume       = "Volume";
 static const char* Key_StartupApp   = "StartupApp";
 static const char* Key_FontSize     = "FontSize";
-// static const char* Key_RetroGoVer   = "RetroGoVer";
+
 // Per-app
 static const char* Key_Region       = "Region";
 static const char* Key_Palette      = "Palette";
