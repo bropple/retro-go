@@ -124,7 +124,7 @@ static bool save_state(char *pathName)
         char *filename = rg_emu_get_path(EMU_PATH_SCREENSHOT, 0);
         if (filename)
         {
-            rg_display_save_frame(filename, currentUpdate, 1);
+            rg_display_save_frame(filename, currentUpdate, -1, -1);
             rg_free(filename);
         }
     }
@@ -149,12 +149,22 @@ static bool load_state(char *pathName)
     return ret;
 }
 
+static bool reset_emulation(bool hard)
+{
+    lynx->Reset();
+    return true;
+}
 
 extern "C" void app_main(void)
 {
-    heap_caps_malloc_extmem_enable(32 * 1024);
+    rg_emu_proc_t handlers = {
+        .loadState = &load_state,
+        .saveState = &save_state,
+        .reset = &reset_emulation,
+    };
+
     rg_system_init(APP_ID, AUDIO_SAMPLE_RATE);
-    rg_emu_init(&load_state, &save_state, NULL);
+    rg_emu_init(handlers);
 
     frames[0].flags = RG_PIXEL_565|RG_PIXEL_BE;
     frames[0].width = HANDY_SCREEN_WIDTH;
@@ -170,6 +180,8 @@ extern "C" void app_main(void)
 
     // The Lynx has a variable framerate
     // app->refreshRate = 75;
+    // The Lynx has a variable framerate but 60 is typical
+    app->refreshRate = 60;
 
     // Init emulator
     lynx = new CSystem(app->romPath, MIKIE_PIXEL_FORMAT_16BPP_565_BE, AUDIO_SAMPLE_RATE);

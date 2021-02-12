@@ -1,11 +1,11 @@
 #include <rg_system.h>
 #include <string.h>
 #include <stdio.h>
+#include <stdarg.h>
 #include <nofrendo.h>
 #include <nes/nes.h>
 #include <nes/input.h>
 #include <nes/state.h>
-#include <bitmap.h>
 
 #define APP_ID 10
 
@@ -16,7 +16,6 @@
 
 static uint8_t *romData;
 static uint32_t romSize;
-static uint32_t romCRC32;
 
 static uint16_t myPalette[64];
 static rg_video_frame_t frames[2];
@@ -85,14 +84,14 @@ static void netplay_callback(netplay_event_t event, void *arg)
 #endif
 }
 
-static bool SaveState(char *pathName)
+static bool save_state(char *pathName)
 {
     if (state_save(pathName) >= 0)
     {
         char *filename = rg_emu_get_path(EMU_PATH_SCREENSHOT, 0);
         if (filename)
         {
-            rg_display_save_frame(filename, currentUpdate, 160.f / currentUpdate->width);
+            rg_display_save_frame(filename, currentUpdate, 160, 0);
             rg_free(filename);
         }
         return true;
@@ -100,13 +99,19 @@ static bool SaveState(char *pathName)
     return false;
 }
 
-static bool LoadState(char *pathName)
+static bool load_state(char *pathName)
 {
     if (state_load(pathName) < 0)
     {
         nes_reset(HARD_RESET);
         return false;
     }
+    return true;
+}
+
+static bool reset_emulation(bool hard)
+{
+    nes_reset(hard ? HARD_RESET : SOFT_RESET);
     return true;
 }
 
@@ -222,11 +227,6 @@ uint32_t osd_getromsize(void)
     return romSize;
 }
 
-uint32_t osd_getromcrc()
-{
-    return romCRC32;
-}
-
 void osd_loadstate()
 {
     if (app->startAction == EMU_START_ACTION_RESUME)
@@ -245,9 +245,12 @@ void osd_loadstate()
     app->refreshRate = nes->refresh_rate;
 }
 
-void osd_logprint(int type, char *string)
+void osd_log(int type, const char *format, ...)
 {
-    printf("%s", string);
+    va_list arg;
+    va_start(arg, format);
+    vprintf(format, arg);
+    va_end(arg);
 }
 
 int osd_init()
@@ -311,15 +314,15 @@ void osd_setpalette(rgb_t *pal)
     rg_display_force_refresh();
 }
 
-void osd_blitscreen(bitmap_t *bmp)
+void osd_blitscreen(uint8 *bmp)
 {
     int crop_v = (overscan) ? nes->overscan : 0;
     int crop_h = (autocrop == 2) || (autocrop == 1 && nes->ppu->left_bg_counter > 210) ? 8 : 0;
 
-    currentUpdate->buffer = bmp->line[crop_v] + crop_h;
-    currentUpdate->stride = bmp->pitch;
-    currentUpdate->width = bmp->width - (crop_h * 2);
-    currentUpdate->height = bmp->height - (crop_v * 2);
+    currentUpdate->buffer = NES_SCREEN_GETPTR(bmp, crop_h, crop_v);
+    currentUpdate->stride = NES_SCREEN_PITCH;
+    currentUpdate->width = NES_SCREEN_WIDTH - (crop_h * 2);
+    currentUpdate->height = NES_SCREEN_HEIGHT - (crop_v * 2);
 
     rg_video_frame_t *previousUpdate = &frames[currentUpdate == &frames[0]];
 
@@ -379,9 +382,15 @@ void osd_getinput(void)
 
 void app_main(void)
 {
-    heap_caps_malloc_extmem_enable(64 * 1024);
+    rg_emu_proc_t handlers = {
+        .loadState = &load_state,
+        .saveState = &save_state,
+        .reset = &reset_emulation,
+        .netplay = &netplay_callback,
+    };
+
     rg_system_init(APP_ID, AUDIO_SAMPLE_RATE);
-    rg_emu_init(&LoadState, &SaveState, &netplay_callback);
+    rg_emu_init(handlers);
 
     app = rg_system_get_app();
 
@@ -391,7 +400,7 @@ void app_main(void)
     frames[1] = frames[0];
 
     // Load ROM
-    printf("app_main: Reading file: '%s'\n", app->romPath);
+    MESSAGE_INFO("Loading rom file: '%s'\n", app->romPath);
 
     FILE *fp;
     if ((fp = rg_fopen(app->romPath, "rb")))
@@ -409,9 +418,7 @@ void app_main(void)
         RG_PANIC("ROM file loading failed!");
     }
 
-    romCRC32 = crc32_le(0, (const uint8_t *)(romData + 16), romSize - 16);
-
-    printf("app_main ROM: OK. romSize=%d, romCRC32=%08X\n", romSize, romCRC32);
+    MESSAGE_INFO("Loading complete! romSize=%d\n", romSize);
 
     int region, ret;
 
@@ -423,7 +430,7 @@ void app_main(void)
         default: region = NES_NTSC; break;
     }
 
-    printf("Nofrendo start!\n");
+    MESSAGE_INFO("Nofrendo start!\n");
 
     ret = nofrendo_start(app->romPath, region, AUDIO_SAMPLE_RATE, true);
 
@@ -431,6 +438,7 @@ void app_main(void)
     {
         case -1: RG_PANIC("Init failed.");
         case -2: RG_PANIC("Unsupported ROM.");
+        case -3: RG_PANIC("ROM Loading failed.");
         default: RG_PANIC("Nofrendo died!");
     }
 }

@@ -5,24 +5,15 @@
 \*****************************************************************************/
 
 #include <string>
-#include <numeric>
-#include <assert.h>
-#include <ctype.h>
-
 #include "snes9x.h"
-#include "memmap.h"
+#include "memory.h"
 #include "apu/apu.h"
 #include "controls.h"
 #include "display.h"
 
-#ifndef SET_UI_COLOR
-#define SET_UI_COLOR(r, g, b) ;
-#endif
+CMemory		Memory;
+uint32		OpenBus = 0;
 
-#undef max
-#define max(a, b) ({__typeof__(a) _a = (a); __typeof__(b) _b = (b);_a > _b ? _a : _b; })
-#undef min
-#define min(a, b) ({__typeof__(a) _a = (a); __typeof__(b) _b = (b);_a < _b ? _a : _b; })
 
 extern uint32 crc32_le(uint32 crc, uint8 const * buf, uint32 len);
 
@@ -60,6 +51,8 @@ static bool8 allASCII (uint8 *b, int size)
 	return (TRUE);
 }
 
+#define match_nn(str) (strncmp(Memory.ROMName, (str), strlen((str))) == 0)
+
 // allocation and deallocation
 
 bool8 CMemory::Init (void)
@@ -67,7 +60,7 @@ bool8 CMemory::Init (void)
 	FillRAM = (uint8 *) calloc(1, 0x2800);
     RAM	 = (uint8 *) calloc(1, 0x20000);
     VRAM = (uint8 *) calloc(1, 0x10000);
-    SRAM = (uint8 *) calloc(1, 0x20000);
+    SRAM = (uint8 *) calloc(1, 0x8000);
     ROM  = (uint8 *) calloc(1, ROM_BUFFER_SIZE + 0x200);
 
 	IPPU.TileCacheData = (uint8 *) calloc(4096, 64);
@@ -218,18 +211,18 @@ bool8 CMemory::LoadROMMem (const uint8 *source, uint32 sourceSize)
 
 bool8 CMemory::LoadROM (const char *filename)
 {
-	FILE *fp = fopen(filename, "rb");
-	if (!fp)
+	STREAM stream = OPEN_STREAM(filename, "rb");
+	if (!stream)
 		return (FALSE);
 
-	fseek(fp, 0, SEEK_END);
+	REVERT_STREAM(stream, 0, SEEK_END);
 
-	ROM_SIZE = ftell(fp);
+	ROM_SIZE = FIND_STREAM(stream);
 
-	fseek(fp, 0, SEEK_SET);
-	fread(ROM, ROM_BUFFER_SIZE + 0x200, 1, fp);
+	REVERT_STREAM(stream, 0, SEEK_SET);
+	READ_STREAM(ROM, ROM_BUFFER_SIZE + 0x200, stream);
 
-	fclose(fp);
+	CLOSE_STREAM(stream);
 
 	return InitROM();
 }
@@ -255,88 +248,24 @@ bool8 CMemory::InitROM ()
 	}
 
 	CalculatedSize = ((ROM_SIZE + 0x1fff) / 0x2000) * 0x2000;
-	ExtendedFormat = NOPE;
 
-	if (CalculatedSize > 0x400000 &&
-		(ROM[0x7fd5] + (ROM[0x7fd6] << 8)) != 0x3423 && // exclude SA-1
-		(ROM[0x7fd5] + (ROM[0x7fd6] << 8)) != 0x3523 &&
-		(ROM[0x7fd5] + (ROM[0x7fd6] << 8)) != 0x4332 && // exclude S-DD1
-		(ROM[0x7fd5] + (ROM[0x7fd6] << 8)) != 0x4532 &&
-		(ROM[0xffd5] + (ROM[0xffd6] << 8)) != 0xF93a && // exclude SPC7110
-		(ROM[0xffd5] + (ROM[0xffd6] << 8)) != 0xF53a)
-		ExtendedFormat = YEAH;
-
-	// CalculatedSize is now set, so rescore
-	int hi_score = ScoreHiROM(FALSE);
-	int lo_score = ScoreLoROM(FALSE);
-
-	if (ExtendedFormat != NOPE)
-	{
-		int swappedhirom = ScoreHiROM(FALSE, 0x400000);
-		int swappedlorom = ScoreLoROM(FALSE, 0x400000);
-
-		// set swapped here
-		if (max(swappedlorom, swappedhirom) >= max(lo_score, hi_score))
-		{
-			ExtendedFormat = BIGFIRST;
-			hi_score = swappedhirom;
-			lo_score = swappedlorom;
-		}
-		else
-			ExtendedFormat = SMALLFIRST;
-	}
-
-	if (Settings.ForceLoROM || (!Settings.ForceHiROM && lo_score >= hi_score))
+	// these two games fail to be detected
+	if (strncmp((char *) &ROM[0x7fc0], "YUYU NO QUIZ DE GO!GO!", 22) == 0 ||
+		(strncmp((char *) &ROM[0xffc0], "BATMAN--REVENGE JOKER",  21) == 0))
 	{
 		LoROM = TRUE;
 		HiROM = FALSE;
 	}
 	else
 	{
-		LoROM = FALSE;
-		HiROM = TRUE;
-	}
-
-	// this two games fail to be detected
-	if (!Settings.ForceHiROM && !Settings.ForceLoROM)
-	{
-		if (strncmp((char *) &ROM[0x7fc0], "YUYU NO QUIZ DE GO!GO!", 22) == 0 ||
-		   (strncmp((char *) &ROM[0xffc0], "BATMAN--REVENGE JOKER",  21) == 0))
-		{
-			LoROM = TRUE;
-			HiROM = FALSE;
-		}
-	}
-
-	if (ExtendedFormat == SMALLFIRST)
-	{
-		RG_PANIC("ExHiROM swapping not implemented yet");
-		// uint8	*tmp = (uint8 *) malloc(CalculatedSize - 0x400000);
-		// if (tmp)
-		// {
-		// 	S9xMessage(S9X_INFO, S9X_ROM_INTERLEAVED_INFO, "Fixing swapped ExHiROM...");
-		// 	memmove(tmp, ROM, CalculatedSize - 0x400000);
-		// 	memmove(ROM, ROM + CalculatedSize - 0x400000, 0x400000);
-		// 	memmove(ROM + 0x400000, tmp, CalculatedSize - 0x400000);
-		// 	free(tmp);
-		// }
+		LoROM = (ScoreLoROM(FALSE) >= ScoreHiROM(FALSE));
+		HiROM = !LoROM;
 	}
 
 	//// Parse ROM header and read ROM informatoin
-	uint8	*RomHeader = ROM + 0x7FB0;
+	ParseSNESHeader(ROM + (HiROM ? 0xFFB0 : 0x7FB0));
 
-	if (ExtendedFormat == BIGFIRST)
-		RomHeader += 0x400000;
-
-	if (HiROM)
-		RomHeader += 0x8000;
-
-	ParseSNESHeader(RomHeader);
-
-	//// Detect and initialize chips
-	//// detection codes are compatible with NSRT
-
-	// DSP 1 & 2
+	// Detect DSP 1 & 2
 	if (ROMType == 0x03 || (ROMType == 0x05 && ROMSpeed != 0x20))
 	{
 		Settings.DSP = 1;
@@ -376,114 +305,60 @@ bool8 CMemory::InitROM ()
 		GetDSP = NULL;
 	}
 
-
-	//// Map memory and calculate checksum
-	Map_Initialize();
-	CalculatedChecksum = 0;
-
+	//// Map memory
 	if (HiROM)
-    {
-		if (ExtendedFormat != NOPE)
-			Map_ExtendedHiROMMap();
-		else
-			Map_HiROMMap();
-    }
+		Map_HiROMMap();
     else
-    {
-		if (ExtendedFormat != NOPE)
-			Map_JumboLoROMMap();
-		else
-		if (strncmp(ROMName, "WANDERERS FROM YS", 17) == 0)
-			Map_NoMAD1LoROMMap();
-		else
-		if (strncmp(ROMName, "SOUND NOVEL-TCOOL", 17) == 0 ||
-			strncmp(ROMName, "DERBY STALLION 96", 17) == 0)
-			Map_ROM24MBSLoROMMap();
-		else
-		if (strncmp(ROMName, "THOROUGHBRED BREEDER3", 21) == 0 ||
-			strncmp(ROMName, "RPG-TCOOL 2", 11) == 0)
-			Map_SRAM512KLoROMMap();
-		else
-			Map_LoROMMap();
-    }
+		Map_LoROMMap();
 
-	Checksum_Calculate();
-
-	bool8 isChecksumOK = (ROMChecksum + ROMComplementChecksum == 0xffff) &
-						 (ROMChecksum == CalculatedChecksum);
-
-	//// Build more ROM information
-
-	// CRC32
-	ROMCRC32 = crc32_le(0, ROM, CalculatedSize);
-
-	// NTSC / PAL
+	// ROM Region
 	Settings.PAL = (Settings.ForcePAL && !Settings.ForceNTSC)
 						|| ((ROMRegion >= 2) && (ROMRegion <= 12));
 
 	if (Settings.PAL)
 	{
-		Settings.FrameTime = Settings.FrameTimePAL;
-		ROMFramesPerSecond = 50;
+		Settings.FrameTime = 20000;
+		Settings.FrameRate = 50;
 	}
 	else
 	{
-		Settings.FrameTime = Settings.FrameTimeNTSC;
-		ROMFramesPerSecond = 60;
-	}
-
-	// truncate cart name
-	ROMName[ROM_NAME_LEN - 1] = 0;
-	if (strlen(ROMName))
-	{
-		char *p = ROMName + strlen(ROMName);
-		if (p > ROMName + 21 && ROMName[20] == ' ')
-			p = ROMName + 21;
-		while (p > ROMName && *(p - 1) == ' ')
-			p--;
-		*p = 0;
+		Settings.FrameTime = 16667;
+		Settings.FrameRate = 60;
 	}
 
 	// SRAM size
 	SRAMMask = SRAMSize ? ((1 << (SRAMSize + 3)) * 128) - 1 : 0;
+	SRAMBytes = SRAMSize ? ((1 << (SRAMSize + 3)) * 128) : 0;
 
-	// checksum
+	if (SRAMBytes > 0x8000)
+	{
+		printf("\n\nWARNING: Default SRAM size too small!, need %d bytes\n\n", SRAMBytes);
+	}
+
+	// Checksums
+	Checksum_Calculate();
+
+	bool8 isChecksumOK = (ROMChecksum + ROMComplementChecksum == 0xffff) &
+						 (ROMChecksum == CalculatedChecksum);
+
+	ROMCRC32 = crc32_le(0, ROM, CalculatedSize);
+
 	if (!isChecksumOK || ((uint32) CalculatedSize > (uint32) (((1 << (ROMSize - 7)) * 128) * 1024)))
 	{
 		Settings.DisplayColor = BUILD_PIXEL(31, 31, 0);
 		SET_UI_COLOR(255, 255, 0);
 	}
 
+	ROMIsPatched = false;
+
+	// CheckAnyPatch();
+
 	// Use slight blue tint to indicate ROM was patched.
-	if (Settings.IsPatched)
+	if (ROMIsPatched)
 	{
 		Settings.DisplayColor = BUILD_PIXEL(26, 26, 31);
 		SET_UI_COLOR(216, 216, 255);
 	}
-
-	//// Initialize emulation
-	Timings.H_Max_Master = SNES_CYCLES_PER_SCANLINE;
-	Timings.H_Max        = Timings.H_Max_Master;
-	Timings.HBlankStart  = SNES_HBLANK_START_HC;
-	Timings.HBlankEnd    = SNES_HBLANK_END_HC;
-	Timings.HDMAInit     = SNES_HDMA_INIT_HC;
-	Timings.HDMAStart    = SNES_HDMA_START_HC;
-	Timings.RenderPos    = SNES_RENDER_START_HC;
-	Timings.V_Max_Master = Settings.PAL ? SNES_MAX_PAL_VCOUNTER : SNES_MAX_NTSC_VCOUNTER;
-	Timings.V_Max        = Timings.V_Max_Master;
-	/* From byuu: The total delay time for both the initial (H)DMA sync (to the DMA clock),
-	   and the end (H)DMA sync (back to the last CPU cycle's mcycle rate (6, 8, or 12)) always takes between 12-24 mcycles.
-	   Possible delays: { 12, 14, 16, 18, 20, 22, 24 }
-	   XXX: Snes9x can't emulate this timing :( so let's use the average value... */
-	Timings.DMACPUSync   = 18;
-	/* If the CPU is halted (i.e. for DMA) while /NMI goes low, the NMI will trigger
-	   after the DMA completes (even if /NMI goes high again before the DMA
-	   completes). In this case, there is a 24-30 cycle delay between the end of DMA
-	   and the NMI handler, time enough for an instruction or two. */
-	// Wild Guns, Mighty Morphin Power Rangers - The Fighting Edition
-	Timings.NMIDMADelay  = 24;
-
-	IPPU.TotalEmulatedFrames = 0;
 
 	//// Hack games
 	ApplyROMFixes();
@@ -502,67 +377,17 @@ bool8 CMemory::InitROM ()
 
 void CMemory::ClearSRAM (bool8 onlyNonSavedSRAM)
 {
-	memset(SRAM, Settings.SRAMInitialValue, 0x20000);
+	if (SRAMBytes > 0)
+		memset(SRAM, 0x00, SRAMBytes);
 }
 
 bool8 CMemory::LoadSRAM (const char *filename)
 {
-	FILE	*file;
-	int		size, len;
-	char	sramName[PATH_MAX + 1];
-
-	strcpy(sramName, filename);
-
-	ClearSRAM();
-
-	size = SRAMSize ? (1 << (SRAMSize + 3)) * 128 : 0;
-	if (size > 0x20000)
-		size = 0x20000;
-
-	if (size)
-	{
-		file = fopen(sramName, "rb");
-		if (file)
-		{
-			len = fread((char *) SRAM, 1, 0x20000, file);
-			fclose(file);
-			if (len - size == 512)
-				memmove(SRAM, SRAM + 512, size);
-
-			return (TRUE);
-		}
-
-		return (FALSE);
-	}
-
 	return (TRUE);
 }
 
 bool8 CMemory::SaveSRAM (const char *filename)
 {
-	FILE	*file;
-	int		size;
-	char	sramName[PATH_MAX + 1];
-
-	strcpy(sramName, filename);
-
-    size = SRAMSize ? (1 << (SRAMSize + 3)) * 128 : 0;
-	if (size > 0x20000)
-		size = 0x20000;
-
-	if (size)
-	{
-		file = fopen(sramName, "wb");
-		if (file)
-		{
-			if (!fwrite((char *) SRAM, size, 1, file))
-				printf ("Couldn't write to SRAM file.\n");
-			fclose(file);
-
-			return (TRUE);
-		}
-	}
-
 	return (FALSE);
 }
 
@@ -572,6 +397,17 @@ void CMemory::ParseSNESHeader (uint8 *RomHeader)
 {
 	strncpy(ROMName, (char *) &RomHeader[0x10], ROM_NAME_LEN - 1);
 	sanitize(ROMName, ROM_NAME_LEN);
+
+	ROMName[ROM_NAME_LEN - 1] = 0;
+	if (strlen(ROMName))
+	{
+		char *p = ROMName + strlen(ROMName);
+		if (p > ROMName + 21 && ROMName[20] == ' ')
+			p = ROMName + 21;
+		while (p > ROMName && *(p - 1) == ' ')
+			p--;
+		*p = 0;
+	}
 
 	ROMSize   = RomHeader[0x27];
 	SRAMSize  = RomHeader[0x28];
@@ -651,36 +487,6 @@ void CMemory::map_hirom (uint32 bank_s, uint32 bank_e, uint32 addr_s, uint32 add
 	}
 }
 
-void CMemory::map_lorom_offset (uint32 bank_s, uint32 bank_e, uint32 addr_s, uint32 addr_e, uint32 size, uint32 offset)
-{
-	uint32	c, i, p, addr;
-
-	for (c = bank_s; c <= bank_e; c++)
-	{
-		for (i = addr_s; i <= addr_e; i += 0x1000)
-		{
-			p = (c << 4) | (i >> 12);
-			addr = ((c - bank_s) & 0x7f) * 0x8000;
-			ReadMap[p] = ROM + offset + map_mirror(size, addr) - (i & 0x8000);
-		}
-	}
-}
-
-void CMemory::map_hirom_offset (uint32 bank_s, uint32 bank_e, uint32 addr_s, uint32 addr_e, uint32 size, uint32 offset)
-{
-	uint32	c, i, p, addr;
-
-	for (c = bank_s; c <= bank_e; c++)
-	{
-		for (i = addr_s; i <= addr_e; i += 0x1000)
-		{
-			p = (c << 4) | (i >> 12);
-			addr = (c - bank_s) << 16;
-			ReadMap[p] = ROM + offset + map_mirror(size, addr);
-		}
-	}
-}
-
 void CMemory::map_space (uint32 bank_s, uint32 bank_e, uint32 addr_s, uint32 addr_e, uint8 *data)
 {
 	uint32	c, i, p;
@@ -709,7 +515,29 @@ void CMemory::map_index (uint32 bank_s, uint32 bank_e, uint32 addr_s, uint32 add
 	}
 }
 
-void CMemory::map_System (void)
+void CMemory::Map_Initialize (void)
+{
+	for (int c = 0; c < MEMMAP_NUM_BLOCKS; c++)
+	{
+		ReadMap[c]  = (uint8 *) MAP_NONE;
+		WriteMap[c] = (uint8 *) MAP_NONE;
+	}
+}
+
+void CMemory::Map_WriteProtectROM (void)
+{
+	memmove((void *) WriteMap, (void *) ReadMap, sizeof(ReadMap));
+
+	for (int c = 0; c < MEMMAP_NUM_BLOCKS; c++)
+	{
+		if (WriteMap[c] >= ROM && WriteMap[c] <= (ROM + ROM_SIZE + 0x8000))
+		{
+			WriteMap[c] = (uint8 *) MAP_NONE;
+		}
+	}
+}
+
+void CMemory::Map_System (void)
 {
 	// will be overwritten
 	map_space(0x00, 0x3f, 0x0000, 0x1fff, RAM);
@@ -720,15 +548,14 @@ void CMemory::map_System (void)
 	map_index(0x80, 0xbf, 0x4000, 0x5fff, MAP_CPU, MAP_TYPE_I_O);
 }
 
-void CMemory::map_WRAM (void)
+void CMemory::Map_WRAM (void)
 {
 	// will overwrite others
-	map_space(0x7e, 0x7e, 0x0000, 0xffff, RAM);
 	map_space(0x7e, 0x7e, 0x0000, 0xffff, RAM);
 	map_space(0x7f, 0x7f, 0x0000, 0xffff, RAM + 0x10000);
 }
 
-void CMemory::map_LoROMSRAM (void)
+void CMemory::Map_LoROMSRAM (void)
 {
 	uint32 hi;
 
@@ -744,13 +571,53 @@ void CMemory::map_LoROMSRAM (void)
 	map_index(0xf0, 0xff, 0x0000, hi, MAP_LOROM_SRAM, MAP_TYPE_RAM);
 }
 
-void CMemory::map_HiROMSRAM (void)
+void CMemory::Map_HiROMSRAM (void)
 {
 	map_index(0x20, 0x3f, 0x6000, 0x7fff, MAP_HIROM_SRAM, MAP_TYPE_RAM);
 	map_index(0xa0, 0xbf, 0x6000, 0x7fff, MAP_HIROM_SRAM, MAP_TYPE_RAM);
 }
 
-void CMemory::map_DSP (void)
+void CMemory::Map_LoROMMap (void)
+{
+	printf("Map_LoROMMap\n");
+	Map_Initialize();
+	Map_System();
+
+	map_lorom(0x00, 0x3f, 0x8000, 0xffff, CalculatedSize);
+	map_lorom(0x40, 0x7f, 0x0000, 0xffff, CalculatedSize);
+	map_lorom(0x80, 0xbf, 0x8000, 0xffff, CalculatedSize);
+	map_lorom(0xc0, 0xff, 0x0000, 0xffff, CalculatedSize);
+
+	if (Settings.DSP)
+		Map_DSP();
+
+    Map_LoROMSRAM();
+	Map_WRAM();
+
+	Map_WriteProtectROM();
+}
+
+void CMemory::Map_HiROMMap (void)
+{
+	printf("Map_HiROMMap\n");
+	Map_Initialize();
+	Map_System();
+
+	map_hirom(0x00, 0x3f, 0x8000, 0xffff, CalculatedSize);
+	map_hirom(0x40, 0x7f, 0x0000, 0xffff, CalculatedSize);
+	map_hirom(0x80, 0xbf, 0x8000, 0xffff, CalculatedSize);
+	map_hirom(0xc0, 0xff, 0x0000, 0xffff, CalculatedSize);
+
+	if (Settings.DSP)
+		Map_DSP();
+
+	Map_HiROMSRAM();
+	Map_WRAM();
+
+	Map_WriteProtectROM();
+}
+
+void CMemory::Map_DSP (void)
 {
 	switch (DSP0.maptype)
 	{
@@ -778,161 +645,13 @@ void CMemory::map_DSP (void)
 	}
 }
 
-void CMemory::map_WriteProtectROM (void)
-{
-	memmove((void *) WriteMap, (void *) ReadMap, sizeof(ReadMap));
-
-	for (int c = 0; c < MEMMAP_NUM_BLOCKS; c++)
-	{
-		if (WriteMap[c] >= ROM && WriteMap[c] <= (ROM + ROM_SIZE + 0x8000))
-		{
-			WriteMap[c] = (uint8 *) MAP_NONE;
-		}
-	}
-}
-
-void CMemory::Map_Initialize (void)
-{
-	for (int c = 0; c < MEMMAP_NUM_BLOCKS; c++)
-	{
-		ReadMap[c]  = (uint8 *) MAP_NONE;
-		WriteMap[c] = (uint8 *) MAP_NONE;
-	}
-}
-
-void CMemory::Map_LoROMMap (void)
-{
-	printf("Map_LoROMMap\n");
-	map_System();
-
-	map_lorom(0x00, 0x3f, 0x8000, 0xffff, CalculatedSize);
-	map_lorom(0x40, 0x7f, 0x0000, 0xffff, CalculatedSize);
-	map_lorom(0x80, 0xbf, 0x8000, 0xffff, CalculatedSize);
-	map_lorom(0xc0, 0xff, 0x0000, 0xffff, CalculatedSize);
-
-	if (Settings.DSP)
-		map_DSP();
-
-    map_LoROMSRAM();
-	map_WRAM();
-
-	map_WriteProtectROM();
-}
-
-void CMemory::Map_NoMAD1LoROMMap (void)
-{
-	printf("Map_NoMAD1LoROMMap\n");
-	map_System();
-
-	map_lorom(0x00, 0x3f, 0x8000, 0xffff, CalculatedSize);
-	map_lorom(0x40, 0x7f, 0x0000, 0xffff, CalculatedSize);
-	map_lorom(0x80, 0xbf, 0x8000, 0xffff, CalculatedSize);
-	map_lorom(0xc0, 0xff, 0x0000, 0xffff, CalculatedSize);
-
-	map_index(0x70, 0x7f, 0x0000, 0xffff, MAP_LOROM_SRAM, MAP_TYPE_RAM);
-	map_index(0xf0, 0xff, 0x0000, 0xffff, MAP_LOROM_SRAM, MAP_TYPE_RAM);
-
-	map_WRAM();
-
-	map_WriteProtectROM();
-}
-
-void CMemory::Map_JumboLoROMMap (void)
-{
-	// XXX: Which game uses this?
-	printf("Map_JumboLoROMMap\n");
-	map_System();
-
-	map_lorom_offset(0x00, 0x3f, 0x8000, 0xffff, CalculatedSize - 0x400000, 0x400000);
-	map_lorom_offset(0x40, 0x7f, 0x0000, 0xffff, CalculatedSize - 0x600000, 0x600000);
-	map_lorom_offset(0x80, 0xbf, 0x8000, 0xffff, 0x400000, 0);
-	map_lorom_offset(0xc0, 0xff, 0x0000, 0xffff, 0x400000, 0x200000);
-
-	map_LoROMSRAM();
-	map_WRAM();
-
-	map_WriteProtectROM();
-}
-
-void CMemory::Map_ROM24MBSLoROMMap (void)
-{
-	// PCB: BSC-1A5M-01, BSC-1A7M-10
-	printf("Map_ROM24MBSLoROMMap\n");
-	map_System();
-
-	map_lorom_offset(0x00, 0x1f, 0x8000, 0xffff, 0x100000, 0);
-	map_lorom_offset(0x20, 0x3f, 0x8000, 0xffff, 0x100000, 0x100000);
-	map_lorom_offset(0x80, 0x9f, 0x8000, 0xffff, 0x100000, 0x200000);
-	map_lorom_offset(0xa0, 0xbf, 0x8000, 0xffff, 0x100000, 0x100000);
-
-	map_LoROMSRAM();
-	map_WRAM();
-
-	map_WriteProtectROM();
-}
-
-void CMemory::Map_SRAM512KLoROMMap (void)
-{
-	printf("Map_SRAM512KLoROMMap\n");
-	map_System();
-
-	map_lorom(0x00, 0x3f, 0x8000, 0xffff, CalculatedSize);
-	map_lorom(0x40, 0x7f, 0x0000, 0xffff, CalculatedSize);
-	map_lorom(0x80, 0xbf, 0x8000, 0xffff, CalculatedSize);
-	map_lorom(0xc0, 0xff, 0x0000, 0xffff, CalculatedSize);
-
-	map_space(0x70, 0x70, 0x0000, 0xffff, SRAM);
-	map_space(0x71, 0x71, 0x0000, 0xffff, SRAM + 0x8000);
-	map_space(0x72, 0x72, 0x0000, 0xffff, SRAM + 0x10000);
-	map_space(0x73, 0x73, 0x0000, 0xffff, SRAM + 0x18000);
-
-	map_WRAM();
-
-	map_WriteProtectROM();
-}
-
-void CMemory::Map_HiROMMap (void)
-{
-	printf("Map_HiROMMap\n");
-	map_System();
-
-	map_hirom(0x00, 0x3f, 0x8000, 0xffff, CalculatedSize);
-	map_hirom(0x40, 0x7f, 0x0000, 0xffff, CalculatedSize);
-	map_hirom(0x80, 0xbf, 0x8000, 0xffff, CalculatedSize);
-	map_hirom(0xc0, 0xff, 0x0000, 0xffff, CalculatedSize);
-
-	if (Settings.DSP)
-		map_DSP();
-
-	map_HiROMSRAM();
-	map_WRAM();
-
-	map_WriteProtectROM();
-}
-
-void CMemory::Map_ExtendedHiROMMap (void)
-{
-	printf("Map_ExtendedHiROMMap\n");
-	map_System();
-
-	map_hirom_offset(0x00, 0x3f, 0x8000, 0xffff, CalculatedSize - 0x400000, 0x400000);
-	map_hirom_offset(0x40, 0x7f, 0x0000, 0xffff, CalculatedSize - 0x400000, 0x400000);
-	map_hirom_offset(0x80, 0xbf, 0x8000, 0xffff, 0x400000, 0);
-	map_hirom_offset(0xc0, 0xff, 0x0000, 0xffff, 0x400000, 0);
-
-	map_HiROMSRAM();
-	map_WRAM();
-
-	map_WriteProtectROM();
-}
-
 // checksum
 
 uint16 CMemory::checksum_calc_sum (uint8 *data, uint32 length)
 {
 	uint16	sum = 0;
 
-	for (uint32 i = 0; i < length; i++)
+	for (size_t i = 0; i < length; i++)
 		sum += data[i];
 
 	return (sum);
@@ -984,7 +703,7 @@ void CMemory::Checksum_Calculate (void)
 
 const char * CMemory::MapType (void)
 {
-	return (HiROM ? ((ExtendedFormat != NOPE) ? "ExHiROM": "HiROM") : "LoROM");
+	return (HiROM ? "HiROM" : "LoROM");
 }
 
 const char * CMemory::StaticRAMSize (void)
@@ -1015,7 +734,7 @@ const char * CMemory::Revision (void)
 {
 	static char	str[20];
 
-	sprintf(str, "1.%d", HiROM ? ((ExtendedFormat != NOPE) ? ROM[0x40ffdb] : ROM[0xffdb]) : ROM[0x7fdb]);
+	sprintf(str, "1.%d", HiROM ? ROM[0xffdb] : ROM[0x7fdb]);
 
 	return (str);
 }
@@ -1106,21 +825,10 @@ void CMemory::MakeRomInfoText (char *romtext)
 
 // hack
 
-bool8 CMemory::match_na (const char *str)
-{
-	return (strcmp(ROMName, str) == 0);
-}
-
-bool8 CMemory::match_nn (const char *str)
-{
-	return (strncmp(ROMName, str, strlen(str)) == 0);
-}
-
 void CMemory::ApplyROMFixes (void)
 {
-	Settings.BlockInvalidVRAMAccess = true;
 	Settings.UniracersHack = FALSE;
-	Settings.SRAMInitialValue = 0x60;
+	Settings.DMACPUSyncHack = FALSE;
 
 	//// Warnings
 
@@ -1129,85 +837,37 @@ void CMemory::ApplyROMFixes (void)
 		(ROMCRC32 == 0x340f23e5) ||
 		(ROMCRC32 == 0x77fd806a) ||
 		(match_nn("HIGHWAY BATTLE 2")) ||
-		(match_na("FX SKIING NINTENDO 96") && (ROM[0x7fda] == 0)) ||
+		(match_nn("FX SKIING NINTENDO 96") && (ROM[0x7fda] == 0)) ||
 		(match_nn("HONKAKUHA IGO GOSEI")   && (ROM[0xffd5] != 0x31)))
 	{
 		Settings.DisplayColor = BUILD_PIXEL(31, 0, 0);
 		SET_UI_COLOR(255, 0, 0);
 	}
 
-	//// APU timing hacks :(
-
-	Timings.APUSpeedup = 0;
-
-	if (!Settings.DisableGameSpecificHacks)
-	{
-		if (match_na("CIRCUIT USA"))
-			Timings.APUSpeedup = 3;
-	}
-
-	S9xAPUTimingSetSpeedup(Timings.APUSpeedup);
-
-	//// Other timing hacks :(
-
-	Timings.HDMAStart   = SNES_HDMA_START_HC + Settings.HDMATimingHack - 100;
-	Timings.HBlankStart = SNES_HBLANK_START_HC + Timings.HDMAStart - SNES_HDMA_START_HC;
-	Timings.IRQTriggerCycles = 14;
+	// Always exec because it sets PAL mode too
+	S9xAPUTimingSetSpeedup(0);
 
 	if (!Settings.DisableGameSpecificHacks)
 	{
-		// The delay to sync CPU and DMA which Snes9x cannot emulate.
-		// Some games need really severe delay timing...
-		if (match_na("BATTLE GRANDPRIX")) // Battle Grandprix
-		{
-			Timings.DMACPUSync = 20;
-			printf("DMA sync: %d\n", Timings.DMACPUSync);
-		}
-		else if (match_na("KORYU NO MIMI ENG")) // Koryu no Mimi translation by rpgone)
-		{
-			// An infinite loop reads $4210 and checks NMI flag. This only works if LDA instruction executes before the NMI triggers,
-			// which doesn't work very well with s9x's default DMA timing.
-			Timings.DMACPUSync = 20;
-			printf("DMA sync: %d\n", Timings.DMACPUSync);
-		}
-	}
+		//// APU timing hacks :(
+		if (match_nn("CIRCUIT USA "))
+			S9xAPUTimingSetSpeedup(3);
 
-	//// SRAM initial value
-
-	if (!Settings.DisableGameSpecificHacks)
-	{
-		if (match_na("HITOMI3"))
+		// SRAM not correctly detected
+		if (match_nn("HITOMI3 "))
 		{
 			SRAMSize = 1;
 			SRAMMask = ((1 << (SRAMSize + 3)) * 128) - 1;
 		}
 
-		// SRAM value fixes
-		if (match_na("SUPER DRIFT OUT")      || // Super Drift Out
-			match_na("SATAN IS OUR FATHER!") ||
-			match_na("goemon 4"))               // Ganbare Goemon Kirakira Douchuu
-			Settings.SRAMInitialValue = 0x00;
+		// The delay to sync CPU and DMA which Snes9x cannot emulate.
+		// Some games need really severe delay timing...
+		Settings.DMACPUSyncHack = (match_nn("BATTLE GRANDPRIX") || match_nn("KORYU NO MIMI ENG"));
 
-		// Additional game fixes by sanmaiwashi ...
-		// XXX: unnecessary?
-		if (match_na("SFX \xC5\xB2\xC4\xB6\xDE\xDD\xC0\xDE\xD1\xD3\xC9\xB6\xDE\xC0\xD8 1")) // SD Gundam Gaiden - Knight Gundam Monogatari
-			Settings.SRAMInitialValue = 0x6b;
-
-		// others: BS and ST-01x games are 0x00.
-	}
-
-	//// OAM hacks :(
-
-	if (!Settings.DisableGameSpecificHacks)
-	{
 		// OAM hacks because we don't fully understand the behavior of the SNES.
 		// Totally wacky display in 2P mode...
 		// seems to need a disproven behavior, so we're definitely overlooking some other bug?
-		if (match_nn("UNIRACERS")) // Uniracers
-		{
-			Settings.UniracersHack = TRUE;
-			printf("Applied Uniracers hack.\n");
-		}
+		Settings.UniracersHack = match_nn("UNIRACERS");
 	}
 }
 
@@ -1306,16 +966,13 @@ static bool8 ReadIPSPatch (Stream *r, long offset, int32 &rom_size)
 	if (ofs != -1 && ofs - offset < rom_size)
 		rom_size = ofs - offset;
 
-	Settings.IsPatched = 1;
+	ROMIsPatched = 1;
 	return (1);
 }
 
 void CMemory::CheckForAnyPatch (const char *rom_filename, bool8 header, int32 &rom_size)
 {
-	Settings.IsPatched = false;
-
-	if (Settings.NoPatch)
-		return;
+	ROMIsPatched = false;
 
 	FSTREAM		patch_file  = NULL;
 	uint32		i;

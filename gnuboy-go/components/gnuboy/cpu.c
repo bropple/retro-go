@@ -263,7 +263,7 @@ label: op(b); break;
 cpu_t cpu;
 
 
-void cpu_reset()
+void cpu_reset(bool hard)
 {
 	cpu.double_speed = 0;
 	cpu.halted = 0;
@@ -336,7 +336,7 @@ static inline void serial_advance(int cycles)
 }
 
 /* cnt - time to emulate, expressed in double-speed cycles
-	Will call lcd_emulate() if CPU emulation catched up or
+	Will call lcd_emulate() if CPU emulation caught up or
 	went ahead of LCDC, so that lcd never falls	behind
 */
 static inline void lcdc_advance(int cycles)
@@ -838,7 +838,7 @@ next:
 		if (IME) {
 			cpu.halted = 1;
 		} else {
-			printf("FIX ME: HALT requested with IME = 0\n");
+			MESSAGE_ERROR("FIX ME: HALT requested with IME = 0\n");
 		}
 		break;
 

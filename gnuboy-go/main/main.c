@@ -15,7 +15,7 @@
 #define APP_ID 20
 
 #define AUDIO_SAMPLE_RATE   (32000)
-#define AUDIO_BUFFER_LENGTH (AUDIO_SAMPLE_RATE / 15 + 1)
+#define AUDIO_BUFFER_LENGTH (AUDIO_SAMPLE_RATE / 16 + 1)
 
 #define NVS_KEY_SAVE_SRAM "sram"
 
@@ -61,7 +61,7 @@ static void netplay_callback(netplay_event_t event, void *arg)
 #endif
 }
 
-static bool SaveState(char *pathName)
+static bool save_state(char *pathName)
 {
     // For convenience we also write the sram to its own file
     // So that it can be imported in other emulators
@@ -72,7 +72,7 @@ static bool SaveState(char *pathName)
         char *filename = rg_emu_get_path(EMU_PATH_SCREENSHOT, 0);
         if (filename)
         {
-            rg_display_save_frame(filename, currentUpdate, 1);
+            rg_display_save_frame(filename, currentUpdate, 0, 0);
             rg_free(filename);
         }
         return true;
@@ -81,11 +81,11 @@ static bool SaveState(char *pathName)
     return false;
 }
 
-static bool LoadState(char *pathName)
+static bool load_state(char *pathName)
 {
     if (state_load(pathName) != 0)
     {
-        emu_reset();
+        emu_reset(true);
 
         if (saveSRAM) sram_load(sramFile);
 
@@ -93,7 +93,12 @@ static bool LoadState(char *pathName)
     }
 
     // TO DO: Call rtc_sync() if a physical RTC is present
+    return true;
+}
 
+static bool reset_emulation(bool hard)
+{
+    emu_reset(hard);
     return true;
 }
 
@@ -226,6 +231,16 @@ void app_main(void)
 {
     i2c_dev_t dev = rg_system_init(APP_ID, AUDIO_SAMPLE_RATE);
     rg_emu_init(&LoadState, &SaveState, &netplay_callback);
+    
+    rg_emu_proc_t handlers = {
+        .loadState = &load_state,
+        .saveState = &save_state,
+        .reset = &reset_emulation,
+        .netplay = &netplay_callback,
+    };
+
+    rg_system_init(APP_ID, AUDIO_SAMPLE_RATE);
+    rg_emu_init(handlers);
 
     app = rg_system_get_app();
 

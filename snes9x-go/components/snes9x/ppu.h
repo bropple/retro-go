@@ -41,15 +41,12 @@ struct ClipData
 struct InternalPPU
 {
 	struct ClipData Clip[2][6];
-	bool8	ColorsChanged;
 	bool8	OBJChanged;
 	uint8	*TileCacheData;
 	uint8	TileCache[4096];
 	bool8	Interlace;
 	bool8	InterlaceOBJ;
 	bool8	PseudoHires;
-	bool8	DoubleWidthPixels;
-	bool8	DoubleHeightPixels;
 	int		CurrentLine;
 	int		PreviousLine;
 	uint8	*XB;
@@ -140,8 +137,6 @@ struct SPPU
 	uint8	VBeamFlip;
 	uint16	HBeamPosLatched;
 	uint16	VBeamPosLatched;
-	uint16	GunHLatch;
-	uint16	GunVLatch;
 	uint8	HVBeamCounterLatched;
 
 	bool8	Mode7HFlip;
@@ -204,26 +199,10 @@ uint8 S9xGetPPU (uint32);
 void S9xSetCPU (uint8, uint32);
 uint8 S9xGetCPU (uint32);
 void S9xUpdateIRQPositions (bool initial);
-void S9xFixColourBrightness (void);
 void S9xDoAutoJoypad (void);
 
 #include "gfx.h"
-#include "memmap.h"
-
-typedef struct
-{
-	uint8	_5C77;
-	uint8	_5C78;
-	uint8	_5A22;
-}	SnesModel;
-
-extern SnesModel	*Model;
-extern SnesModel	M1SNES;
-extern SnesModel	M2SNES;
-
-#define MAX_5C77_VERSION	0x01
-#define MAX_5C78_VERSION	0x03
-#define MAX_5A22_VERSION	0x02
+#include "memory.h"
 
 void S9xUpdateScreen (void);
 static inline void FLUSH_REDRAW (void)
@@ -336,15 +315,12 @@ static inline void REGISTER_2104 (uint8 Byte)
 	if (!PPU.ForcedBlanking && CPU.V_Counter < PPU.ScreenHeight + FIRST_VISIBLE_LINE) \
 	{ \
 		printf("Invalid VRAM acess at (%04d, %04d) blank:%d\n", CPU.Cycles, CPU.V_Counter, PPU.ForcedBlanking); \
-		if (Settings.BlockInvalidVRAMAccess) \
-		{ \
-			PPU.VMA.Address += !PPU.VMA.High ? PPU.VMA.Increment : 0; \
-			return; \
-		} \
+		PPU.VMA.Address += !PPU.VMA.High ? PPU.VMA.Increment : 0; \
+		return; \
 	}
 #else
 #define CHECK_INBLANK() \
-	if (Settings.BlockInvalidVRAMAccess && !PPU.ForcedBlanking && CPU.V_Counter < PPU.ScreenHeight + FIRST_VISIBLE_LINE) \
+	if (!PPU.ForcedBlanking && CPU.V_Counter < PPU.ScreenHeight + FIRST_VISIBLE_LINE) \
 	{ \
 		PPU.VMA.Address += !PPU.VMA.High ? PPU.VMA.Increment : 0; \
 		return; \
@@ -420,15 +396,12 @@ static inline void REGISTER_2118_linear (uint8 Byte)
     if (!PPU.ForcedBlanking && CPU.V_Counter < PPU.ScreenHeight + FIRST_VISIBLE_LINE) \
     { \
         printf("Invalid VRAM acess at (%04d, %04d) blank:%d\n", CPU.Cycles, CPU.V_Counter, PPU.ForcedBlanking); \
-        if (Settings.BlockInvalidVRAMAccess) \
-        { \
-            PPU.VMA.Address += PPU.VMA.High ? PPU.VMA.Increment : 0; \
-            return; \
-        } \
+		PPU.VMA.Address += PPU.VMA.High ? PPU.VMA.Increment : 0; \
+		return; \
     }
 #else
 #define CHECK_INBLANK() \
-        if (Settings.BlockInvalidVRAMAccess && !PPU.ForcedBlanking && CPU.V_Counter < PPU.ScreenHeight + FIRST_VISIBLE_LINE) \
+        if (!PPU.ForcedBlanking && CPU.V_Counter < PPU.ScreenHeight + FIRST_VISIBLE_LINE) \
         { \
             PPU.VMA.Address += PPU.VMA.High ? PPU.VMA.Increment : 0; \
             return; \
@@ -499,11 +472,10 @@ static inline void REGISTER_2122 (uint8 Byte)
 		{
 			FLUSH_REDRAW();
 			PPU.CGDATA[PPU.CGADD] = (Byte & 0x7f) << 8 | PPU.CGSavedByte;
-			IPPU.ColorsChanged = TRUE;
-			int r = IPPU.XB[PPU.CGSavedByte & 0x1f];
-			int g = IPPU.XB[(Byte >> 2) & 0x1f];
-			int b = IPPU.XB[(PPU.CGDATA[PPU.CGADD] >> 5) & 0x1f];
-			IPPU.ScreenColors[PPU.CGADD] = (uint16) BUILD_PIXEL(r, g, b);
+			uint8 r = IPPU.XB[PPU.CGSavedByte & 0x1f];
+			uint8 g = IPPU.XB[(PPU.CGDATA[PPU.CGADD] >> 5) & 0x1f];
+			uint8 b = IPPU.XB[(Byte >> 2) & 0x1f];
+			IPPU.ScreenColors[PPU.CGADD] = BUILD_PIXEL(r, g, b);
 		}
 
 		PPU.CGADD++;
@@ -528,7 +500,7 @@ static inline uint8 REGISTER_4212 (void)
 
     if ((CPU.V_Counter >= PPU.ScreenHeight + FIRST_VISIBLE_LINE) && (CPU.V_Counter < PPU.ScreenHeight + FIRST_VISIBLE_LINE + 3))
 		byte = 1;
-	if ((CPU.Cycles < Timings.HBlankEnd) || (CPU.Cycles >= Timings.HBlankStart))
+	if ((CPU.Cycles < SNES_HBLANK_END_HC) || (CPU.Cycles >= SNES_HBLANK_START_HC))
 		byte |= 0x40;
     if (CPU.V_Counter >= PPU.ScreenHeight + FIRST_VISIBLE_LINE)
 		byte |= 0x80;

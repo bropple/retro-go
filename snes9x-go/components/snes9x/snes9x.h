@@ -12,8 +12,6 @@
 #endif
 
 #include "port.h"
-#include "65c816.h"
-#include "messages.h"
 
 #include <rg_system.h>
 
@@ -27,43 +25,16 @@
 #define RETRO_LESS_ACCURATE_APU 0
 
 
-#ifdef ZLIB
-#include <zlib.h>
-#define FSTREAM					gzFile
-#define READ_FSTREAM(p, l, s)	gzread(s, p, l)
-#define WRITE_FSTREAM(p, l, s)	gzwrite(s, p, l)
-#define GETS_FSTREAM(p, l, s)	gzgets(s, p, l)
-#define GETC_FSTREAM(s)			gzgetc(s)
-#define OPEN_FSTREAM(f, m)		gzopen(f, m)
-#define REOPEN_FSTREAM(f, m)		gzdopen(f, m)
-#define FIND_FSTREAM(f)			gztell(f)
-#define REVERT_FSTREAM(s, o, p)	gzseek(s, o, p)
-#define CLOSE_FSTREAM(s)			gzclose(s)
-#else
-#define FSTREAM					FILE *
-#define READ_FSTREAM(p, l, s)	fread(p, 1, l, s)
-#define WRITE_FSTREAM(p, l, s)	fwrite(p, 1, l, s)
-#define GETS_FSTREAM(p, l, s)	fgets(p, l, s)
-#define GETC_FSTREAM(s)			fgetc(s)
-#define OPEN_FSTREAM(f, m)		fopen(f, m)
-#define REOPEN_FSTREAM(f, m)		fdopen(f, m)
-#define FIND_FSTREAM(s)			ftell(s)
-#define REVERT_FSTREAM(s, o, p)	fseek(s, o, p)
-#define CLOSE_FSTREAM(s)			fclose(s)
-#endif
+#define STREAM					FILE *
+#define GETS_STREAM(p, l, s)	fgets(p, l, s)
+#define GETC_STREAM(s)			fgetc(s)
+#define READ_STREAM(p, l, s)	fread(p, 1, l, s)
+#define WRITE_STREAM(p, l, s)	fwrite(p, 1, l, s)
+#define OPEN_STREAM(f, m)		fopen(f, m)
+#define FIND_STREAM(s)			ftell(s)
+#define REVERT_STREAM(s, o, p)	fseek(s, o, p)
+#define CLOSE_STREAM(s)			fclose(s)
 
-#include "stream.h"
-
-#define STREAM					Stream *
-#define READ_STREAM(p, l, s)	s->read(p,l)
-#define WRITE_STREAM(p, l, s)	s->write(p,l)
-#define GETS_STREAM(p, l, s)	s->gets(p,l)
-#define GETC_STREAM(s)			s->get_char()
-#define OPEN_STREAM(f, m)		openStreamFromFSTREAM(f, m)
-#define REOPEN_STREAM(f, m)		reopenStreamFromFd(f, m)
-#define FIND_STREAM(s)			s->pos()
-#define REVERT_STREAM(s, o, p)	s->revert(p, o)
-#define CLOSE_STREAM(s)			s->closeStream()
 
 #define SNES_WIDTH					256
 #define SNES_HEIGHT					224
@@ -74,24 +45,20 @@
 
 #define SNES_MAX_NTSC_VCOUNTER		262
 #define SNES_MAX_PAL_VCOUNTER		312
-#define SNES_HCOUNTER_MAX			341
+#define SNES_MAX_VCOUNTER			(Settings.PAL ? SNES_MAX_PAL_VCOUNTER : SNES_MAX_NTSC_VCOUNTER)
+#define SNES_MAX_HCOUNTER			341
 
-#ifndef ALLOW_CPU_OVERCLOCK
 #define ONE_CYCLE					6
 #define SLOW_ONE_CYCLE				8
 #define TWO_CYCLES					12
-#else
-#define ONE_CYCLE      (Settings.OneClockCycle)
-#define SLOW_ONE_CYCLE (Settings.OneSlowClockCycle)
-#define TWO_CYCLES     (Settings.TwoClockCycles)
-#endif
 #define	ONE_DOT_CYCLE				4
 
-#define SNES_CYCLES_PER_SCANLINE	(SNES_HCOUNTER_MAX * ONE_DOT_CYCLE)
+#define SNES_CYCLES_PER_SCANLINE	(SNES_MAX_HCOUNTER * ONE_DOT_CYCLE)
 #define SNES_SCANLINE_TIME			(SNES_CYCLES_PER_SCANLINE / NTSC_MASTER_CLOCK)
 
-#define SNES_WRAM_REFRESH_HC_v1		530
-#define SNES_WRAM_REFRESH_HC_v2		538
+#define SNES_SPRITE_TILE_PER_LINE	34
+
+#define SNES_WRAM_REFRESH_HC		538
 #define SNES_WRAM_REFRESH_CYCLES	40
 
 #define SNES_HBLANK_START_HC		1096					// H=274
@@ -99,6 +66,20 @@
 #define	SNES_HBLANK_END_HC			4						// H=1
 #define	SNES_HDMA_INIT_HC			20						// FIXME: not true
 #define	SNES_RENDER_START_HC		(128 * ONE_DOT_CYCLE)	// FIXME: Snes9x renders a line at a time.
+
+#define SNES_IRQ_TRIGGER_CYCLES		14
+
+/* From byuu: The total delay time for both the initial (H)DMA sync (to the DMA clock),
+	and the end (H)DMA sync (back to the last CPU cycle's mcycle rate (6, 8, or 12)) always takes between 12-24 mcycles.
+	Possible delays: { 12, 14, 16, 18, 20, 22, 24 }
+	XXX: Snes9x can't emulate this timing :( so let's use the average value... */
+#define SNES_DMA_CPU_SYNC_CYCLES	18
+
+/* If the CPU is halted (i.e. for DMA) while /NMI goes low, the NMI will trigger
+	after the DMA completes (even if /NMI goes high again before the DMA
+	completes). In this case, there is a 24-30 cycle delay between the end of DMA
+	and the NMI handler, time enough for an instruction or two. */
+#define SNES_NMI_DMA_DELAY		24
 
 #define SNES_TR_MASK		(1 <<  4)
 #define SNES_TL_MASK		(1 <<  5)
@@ -124,18 +105,33 @@
 #define ROM_NAME_LEN	23
 #define AUTO_FRAMERATE	200
 
+typedef enum
+{
+	HC_HBLANK_START_EVENT = 1,
+	HC_HDMA_START_EVENT   = 2,
+	HC_HCOUNTER_MAX_EVENT = 3,
+	HC_HDMA_INIT_EVENT    = 4,
+	HC_RENDER_EVENT       = 5,
+	HC_WRAM_REFRESH_EVENT = 6
+} hevent_t;
+
+enum
+{
+	IRQ_NONE        = 0x0,
+	IRQ_SET_FLAG    = 0x1,
+	IRQ_CLEAR_FLAG  = 0x2,
+	IRQ_TRIGGER_NMI = 0x4
+};
+
 struct SCPUState
 {
 	uint32	Flags;
 	int32	Cycles;
-	int32	PrevCycles;
 	int32	V_Counter;
 	uint8	*PCBase;
 	bool8	NMIPending;
 	bool8	IRQLine;
-	bool8	IRQTransition;
 	bool8	IRQLastState;
-	bool8	IRQExternal;
 	int32	IRQPending;
 	int32	MemSpeed;
 	int32	MemSpeedx2;
@@ -146,52 +142,15 @@ struct SCPUState
 	bool8	InWRAMDMAorHDMA;
 	uint8	HDMARanInDMA;
 	int32	CurrentDMAorHDMAChannel;
-	int32	WhichEvent;
+	hevent_t	WhichEvent;
 	int32	NextEvent;
 	bool8	WaitingForInterrupt;
 	uint32	AutoSaveTimer;
 	bool8	SRAMModified;
-};
 
-enum
-{
-	HC_HBLANK_START_EVENT = 1,
-	HC_HDMA_START_EVENT   = 2,
-	HC_HCOUNTER_MAX_EVENT = 3,
-	HC_HDMA_INIT_EVENT    = 4,
-	HC_RENDER_EVENT       = 5,
-	HC_WRAM_REFRESH_EVENT = 6
-};
-
-enum
-{
-	IRQ_NONE        = 0x0,
-	IRQ_SET_FLAG    = 0x1,
-	IRQ_CLEAR_FLAG  = 0x2,
-	IRQ_TRIGGER_NMI = 0x4
-};
-
-struct STimings
-{
-	int32	H_Max_Master;
-	int32	H_Max;
-	int32	V_Max_Master;
-	int32	V_Max;
-	int32	HBlankStart;
-	int32	HBlankEnd;
-	int32	HDMAInit;
-	int32	HDMAStart;
 	int32	NMITriggerPos;
 	int32	NextIRQTimer;
-	int32	IRQTriggerCycles;
-	int32	WRAMRefreshPos;
-	int32	RenderPos;
-	bool8	InterlaceField;
-	int32	DMACPUSync;		// The cycles to synchronize DMA and CPU. Snes9x cannot emulate correctly.
-	int32	NMIDMADelay;	// The delay of NMI trigger after DMA transfers. Snes9x cannot emulate correctly.
 	int32	IRQFlagChanging;	// This value is just a hack.
-	int32	APUSpeedup;
-	bool8	APUAllowTimeOverflow;
 };
 
 struct SSettings
@@ -206,17 +165,13 @@ struct SSettings
 
 	uint8	DSP;
 
-	bool8	ForceLoROM;
-	bool8	ForceHiROM;
 	bool8	ForcePAL;
 	bool8	ForceNTSC;
 	bool8	PAL;
-	uint32	FrameTimePAL;
-	uint32	FrameTimeNTSC;
 	uint32	FrameTime;
+	uint32	FrameRate;
 
 	bool8	SoundSync;
-	bool8	SixteenBitSound;
 	uint32	SoundPlaybackRate;
 	uint32	SoundInputRate;
 	bool8	Stereo;
@@ -229,38 +184,20 @@ struct SSettings
 	uint8	BG_Forced;
 	bool8	DisableGraphicWindows;
 
-	bool8	DisplayFrameRate;
-	bool8	AutoDisplayMessages;
 	uint32	InitialInfoStringTimeout;
 	uint16	DisplayColor;
 
-	bool8	ForcedPause;
 	bool8	Paused;
-	bool8	StopEmulation;
 
 	uint32	SkipFrames;
 	uint32	TurboSkipFrames;
-	uint32	AutoMaxSkipFrames;
 	bool8	TurboMode;
-	bool8	FrameAdvance;
 
-	bool8	FastSavestates;
-
-	bool8	NoPatch;
-	bool8	IgnorePatchChecksum;
-	bool8	IsPatched;
 	int32	AutoSaveDelay;
 
 	bool8	DisableGameSpecificHacks;
-	bool8	BlockInvalidVRAMAccess;
-	int32	HDMATimingHack;
-	uint8	SRAMInitialValue;
-	uint8	UniracersHack;
-
-	int	OneClockCycle;
-	int	OneSlowClockCycle;
-	int	TwoClockCycles;
-	int	MaxSpriteTilesPerLine;
+	bool8	UniracersHack;
+	bool8	DMACPUSyncHack;
 };
 
 void S9xExit(void);
@@ -269,7 +206,51 @@ void S9xInitSettings(void);
 
 extern struct SSettings			Settings;
 extern struct SCPUState			CPU;
-extern struct STimings			Timings;
 extern char						String[513];
+
+// Types of message sent to S9xMessage()
+enum
+{
+	S9X_TRACE,
+	S9X_DEBUG,
+	S9X_WARNING,
+	S9X_INFO,
+	S9X_ERROR,
+	S9X_FATAL_ERROR
+};
+
+// Individual message numbers
+enum
+{
+	S9X_NO_INFO,
+	S9X_ROM_INFO,
+	S9X_HEADERS_INFO,
+	S9X_CONFIG_INFO,
+	S9X_ROM_CONFUSING_FORMAT_INFO,
+	S9X_ROM_INTERLEAVED_INFO,
+	S9X_SOUND_DEVICE_OPEN_FAILED,
+	S9X_APU_STOPPED,
+	S9X_USAGE,
+	S9X_GAME_GENIE_CODE_ERROR,
+	S9X_ACTION_REPLY_CODE_ERROR,
+	S9X_GOLD_FINGER_CODE_ERROR,
+	S9X_DEBUG_OUTPUT,
+	S9X_DMA_TRACE,
+	S9X_HDMA_TRACE,
+	S9X_WRONG_FORMAT,
+	S9X_WRONG_VERSION,
+	S9X_ROM_NOT_FOUND,
+	S9X_FREEZE_FILE_NOT_FOUND,
+	S9X_PPU_TRACE,
+	S9X_TRACE_DSP1,
+	S9X_FREEZE_ROM_NAME,
+	S9X_HEADER_WARNING,
+	S9X_NETPLAY_NOT_SERVER,
+	S9X_FREEZE_FILE_INFO,
+	S9X_TURBO_MODE,
+	S9X_SOUND_NOT_BUILT,
+	S9X_SNAPSHOT_INCONSISTENT,
+	S9X_PRESSED_KEYS_INFO
+};
 
 #endif

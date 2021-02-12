@@ -55,22 +55,19 @@ void IRAM_ATTR mem_updatemap()
 		mbc.rmap[0x7] = rom.bank[mbc.rombank] - 0x4000;
 	}
 
-	// VRAM
+	// Video RAM
 	mbc.rmap[0x8] = mbc.wmap[0x8] = lcd.vbank[R_VBK & 1] - 0x8000;
 	mbc.rmap[0x9] = mbc.wmap[0x9] = lcd.vbank[R_VBK & 1] - 0x8000;
 
-	// SRAM
+	// Backup RAM
 	if (mbc.enableram && !(rtc.sel & 8))
 	{
 	 	// mbc.rmap[0xA] = mbc.wmap[0xA] = ram.sbank[mbc.rambank] - 0xA000;
 	 	// mbc.rmap[0xB] = mbc.wmap[0xB] = ram.sbank[mbc.rambank] - 0xA000;
 	}
 
-	// WRAM
-	// NOTE: This cause stuttering in some games, needs more investigating...
-	// mbc.rmap[0xC] = mbc.wmap[0xC] = ram.ibank[0] - 0xC000;
-	// mbc.rmap[0xD] = mbc.wmap[0xD] = ram.ibank[(R_SVBK & 0x7) ?: 1] - 0xD000;
-	// mbc.rmap[0xE] = mbc.wmap[0xE] = ram.ibank[0] - 0xE000; // Mirror
+	// Work RAM
+	mbc.rmap[0xC] = mbc.wmap[0xC] = ram.ibank[0] - 0xC000;
 
 	// IO port and registers
 	mbc.rmap[0xF] = mbc.wmap[0xF] = NULL;
@@ -212,7 +209,7 @@ static inline void ioreg_write(byte r, byte b)
 		}
 	}
 
-	/* printf("reg %02X => %02X (%02X)\n", r, REG(r), b); */
+	MESSAGE_DEBUG("reg %02X => %02X (%02X)\n", r, REG(r), b);
 }
 
 
@@ -279,7 +276,8 @@ static inline void mbc_write(addr_t a, byte b)
 {
 	byte ha = (a >> 12);
 
-	// printf("mbc %d: rom bank %02X -[%04X:%02X]-> ", mbc.type, mbc.rombank, a, b);
+	MESSAGE_DEBUG("mbc %d: rom bank %02X -[%04X:%02X]-> ", mbc.type, mbc.rombank, a, b);
+
 	switch (mbc.type)
 	{
 	case MBC_MBC1:
@@ -365,7 +363,7 @@ static inline void mbc_write(addr_t a, byte b)
 			// Nothing but Radikal Bikers tries to access it.
 			break;
 		default:
-			printf("MBC_MBC5: invalid write to 0x%x (0x%x)\n", a, b);
+			MESSAGE_ERROR("MBC_MBC5: invalid write to 0x%x (0x%x)\n", a, b);
 			break;
 		}
 		break;
@@ -415,7 +413,8 @@ static inline void mbc_write(addr_t a, byte b)
 		break;
 	}
 
-	// printf("%02X\n", mbc.rombank);
+	MESSAGE_DEBUG("%02X\n", mbc.rombank);
+
 	mem_updatemap();
 }
 
@@ -430,7 +429,8 @@ void IRAM_ATTR mem_write(addr_t a, byte b)
 {
 	byte ha = (a >> 12) & 0xE;
 
-	/* printf("write to 0x%04X: 0x%02X\n", a, b); */
+	MESSAGE_DEBUG("write to 0x%04X: 0x%02X\n", a, b);
+
 	switch (ha)
 	{
 	case 0x0:
@@ -496,7 +496,8 @@ byte IRAM_ATTR mem_read(addr_t a)
 {
 	byte ha = (a >> 12) & 0xE;
 
-	/* printf("read %04x\n", a); */
+	MESSAGE_DEBUG("read %04x\n", a);
+
 	switch (ha)
 	{
 	case 0x0:
@@ -547,7 +548,7 @@ byte IRAM_ATTR mem_read(addr_t a)
 	return 0xFF;
 }
 
-void mbc_reset()
+void mbc_reset(bool hard)
 {
 	mbc.rombank = 1;
 	mbc.rambank = 0;

@@ -31,7 +31,7 @@
 #define PANIC_TRACE_MAGIC 0x12345678
 
 #ifdef ENABLE_PROFILING
-#define INPUT_TIMEOUT 1000000000
+#define INPUT_TIMEOUT -1
 #else
 #define INPUT_TIMEOUT 8000000
 #endif
@@ -54,6 +54,7 @@ static panic_trace_t *panicTrace = (void *)0x50001000;
 static rg_app_desc_t currentApp;
 static runtime_stats_t statistics;
 static runtime_counters_t counters;
+static long inputTimeout = -1;
 
 #if USE_SPI_MUTEX
 static SemaphoreHandle_t spiMutex;
@@ -71,7 +72,7 @@ static void system_monitor_task(void *arg)
     while (1)
     {
         float tickTime = get_elapsed_time() - counters.resetTime;
-        long  ticks = counters.ticks - current.ticks;
+        // long  ticks = counters.ticks - current.ticks;
 
         // Make a copy and reset counters immediately because processing could take 1-2ms
         current = counters;
@@ -83,6 +84,7 @@ static void system_monitor_task(void *arg)
         statistics.busyPercent = RG_MIN(current.busyTime / tickTime * 100.f, 100.f);
         statistics.skippedFPS = current.skippedFrames / (tickTime / 1000000.f);
         statistics.totalFPS = current.totalFrames / (tickTime / 1000000.f);
+        statistics.freeStackMain = uxTaskGetStackHighWaterMark(currentApp.mainTaskHandle);
 
         heap_caps_get_info(&heap_info, MALLOC_CAP_INTERNAL|MALLOC_CAP_8BIT);
         statistics.freeMemoryInt = heap_info.total_free_bytes;
@@ -103,32 +105,37 @@ static void system_monitor_task(void *arg)
             rg_system_set_led(ledState);
         }
 
-        if (counters.ticks == 0)
-        {
-            // App isn't ticking (eg, our launcher)
-        }
-        else if (ticks > 0)
-        {
-            printf("HEAP:%d+%d (%d+%d), BUSY:%.4f, FPS:%.4f (SKIP:%d, PART:%d, FULL:%d), BATTERY:%d\n",
-                statistics.freeMemoryInt / 1024,
-                statistics.freeMemoryExt / 1024,
-                statistics.freeBlockInt / 1024,
-                statistics.freeBlockExt / 1024,
-                statistics.busyPercent,
-                statistics.totalFPS,
-                current.skippedFrames,
-                current.totalFrames - current.fullFrames - current.skippedFrames,
-                current.fullFrames,
-                statistics.battery.millivolts);
-        }
-        else if (rg_input_gamepad_last_read() > INPUT_TIMEOUT)
+        RG_LOGX("STACK:%d, HEAP:%d+%d (%d+%d), BUSY:%.4f, FPS:%.4f (SKIP:%d, PART:%d, FULL:%d), BATTERY:%d\n",
+            statistics.freeStackMain,
+            statistics.freeMemoryInt / 1024,
+            statistics.freeMemoryExt / 1024,
+            statistics.freeBlockInt / 1024,
+            statistics.freeBlockExt / 1024,
+            statistics.busyPercent,
+            statistics.totalFPS,
+            current.skippedFrames,
+            current.totalFrames - current.fullFrames - current.skippedFrames,
+            current.fullFrames,
+            statistics.battery.millivolts);
+
+        // if (statistics.freeStackMain < 1024)
+        // {
+        //     RG_PANIC("Running out of stack space!");
+        // }
+
+        // if (RG_MAX(statistics.freeBlockInt, statistics.freeBlockExt) < 8192)
+        // {
+        //     RG_PANIC("Running out of heap space!");
+        // }
+
+        if (inputTimeout > 0 && rg_input_gamepad_last_read() > inputTimeout)
         {
             RG_PANIC("Application unresponsive");
         }
 
         if (abs(time(NULL) - lastTime) > 60)
         {
-            printf("%s: System time suddenly changed! Saving...\n", __func__);
+            RG_LOGI("System time suddenly changed! Saving...\n");
             rg_system_time_save();
         }
         lastTime = time(NULL);
@@ -149,18 +156,23 @@ static void system_monitor_task(void *arg)
     vTaskDelete(NULL);
 }
 
-// IRAM_ATTR void rg_system_tick(int fullFrames, int partialFrames, int skippedFrames, int busyTime)
 IRAM_ATTR void rg_system_tick(bool skippedFrame, bool fullFrame, int busyTime)
 {
-    // counters.skippedFrames += skippedFrames;
-    // counters.fullFrames += fullFrames;
-    // counters.totalFrames += fullFrames + partialFrames + skippedFrames;
-    if (skippedFrame) counters.skippedFrames++;
-    else if (fullFrame) counters.fullFrames++;
-    counters.totalFrames++;
+    if (skippedFrame)
+        counters.skippedFrames++;
+    else if (fullFrame)
+        counters.fullFrames++;
 
     counters.busyTime += busyTime;
+
+    counters.totalFrames++;
     counters.ticks++;
+
+    // Reduce the inputTimeout once the emulation is running
+    if (counters.ticks == 1)
+    {
+        inputTimeout = INPUT_TIMEOUT;
+    }
 }
 
 runtime_stats_t rg_system_get_stats()
@@ -192,11 +204,11 @@ bool rg_sdcard_mount()
 
     if (ret == ESP_OK)
     {
-        printf("%s: SD Card mounted, freq=%d\n", __func__, 0);
+        RG_LOGI("SD Card mounted, freq=%d\n", 0);
         return true;
     }
 
-    printf("%s: SD Card mounting failed (%d)\n", __func__, ret);
+    RG_LOGE("SD Card mounting failed (%d)\n", ret);
     return false;
 }
 
@@ -205,10 +217,10 @@ bool rg_sdcard_unmount()
     esp_err_t ret = esp_vfs_fat_sdmmc_unmount();
     if (ret == ESP_OK)
     {
-        printf("%s: SD Card unmounted\n", __func__);
+        RG_LOGI("SD Card unmounted\n");
         return true;
     }
-    printf("%s: SD Card unmounting failed (%d)\n", __func__, ret);
+    RG_LOGE("SD Card unmounting failed (%d)\n", ret);
     return false;
 }
 
@@ -243,11 +255,9 @@ i2c_dev_t rg_system_init(int appId, int sampleRate)
 {
     const esp_app_desc_t *app = esp_ota_get_app_description();
 
-    printf("\n========================================================\n");
-    printf("%s %s (%s %s)\n", app->project_name, app->version, app->date, app->time);
-    printf("========================================================\n\n");
-
-    printf("%s: %d KB free\n", __func__, esp_get_free_heap_size() / 1024);
+    RG_LOGX("\n========================================================\n");
+    RG_LOGX("%s %s (%s %s)\n", app->project_name, app->version, app->date, app->time);
+    RG_LOGX("========================================================\n\n");
 
     #if USE_SPI_MUTEX
     spiMutex = xSemaphoreCreateMutex();
@@ -259,6 +269,8 @@ i2c_dev_t rg_system_init(int appId, int sampleRate)
 
     memset(&currentApp, 0, sizeof(currentApp));
     currentApp.id = appId;
+    currentApp.refreshRate = 60;
+    currentApp.mainTaskHandle = xTaskGetCurrentTaskHandle();
 
     // sdcard init must be before rg_display_init()
     // and rg_settings_init() if JSON is used
@@ -283,7 +295,7 @@ i2c_dev_t rg_system_init(int appId, int sampleRate)
     if (esp_reset_reason() == ESP_RST_PANIC)
     {
         if (panicTrace->magicWord == PANIC_TRACE_MAGIC)
-            printf(" *** PREVIOUS PANIC: %s *** \n", panicTrace->message);
+            RG_LOGX(" *** PREVIOUS PANIC: %s *** \n", panicTrace->message);
         else  // Presumably abort()
             strcpy(panicTrace->message, "Application crashed");
         panicTrace->magicWord = 0;
@@ -296,7 +308,7 @@ i2c_dev_t rg_system_init(int appId, int sampleRate)
     if (esp_reset_reason() != ESP_RST_SW)
     {
         rg_display_clear(0);
-        rg_display_show_hourglass();
+        rg_gui_draw_hourglass();
     }
 
     if (!sd_init)
@@ -312,20 +324,20 @@ i2c_dev_t rg_system_init(int appId, int sampleRate)
     }
 
     #ifdef ENABLE_PROFILING
-        printf("%s: Profiling has been enabled at compile time!\n", __func__);
+        RG_LOGI("Profiling has been enabled at compile time!\n");
         rg_profiler_init();
     #endif
 
     xTaskCreate(&system_monitor_task, "sysmon", 2048, NULL, 7, NULL);
 
     panicTrace->magicWord = 0;
-
-    printf("%s: System ready!\n\n", __func__);
+    
+    RG_LOGI("System ready!\n\n");
     
     return dev;
 }
 
-void rg_emu_init(state_handler_t load, state_handler_t save, netplay_callback_t netplay_cb)
+void rg_emu_init(rg_emu_proc_t handlers)
 {
     // If any key is pressed we go back to the menu (recover from ROM crash)
     if (rg_input_key_is_pressed(GAMEPAD_KEY_ANY))
@@ -352,18 +364,19 @@ void rg_emu_init(state_handler_t load, state_handler_t save, netplay_callback_t 
         RG_PANIC("Invalid ROM path!");
     }
 
-    if (netplay_cb)
+    currentApp.handlers = handlers;
+
+    #ifdef ENABLE_NETPLAY
+    if (currentApp.handlers.netplay)
     {
-        #ifdef ENABLE_NETPLAY
-            rg_netplay_init(netplay_cb);
-        #endif
+        rg_netplay_init(netplay_cb);
     }
+    #endif
 
-    currentApp.loadState = load;
-    currentApp.saveState = save;
-    currentApp.refreshRate = 60;
+    // This is to allow time for rom loading
+    inputTimeout = INPUT_TIMEOUT * 3;
 
-    printf("%s: Init done. romPath='%s'\n", __func__, currentApp.romPath);
+    RG_LOGI("Init done. romPath='%s'\n\n", currentApp.romPath);
 }
 
 rg_app_desc_t *rg_system_get_app()
@@ -440,25 +453,30 @@ char* rg_emu_get_path(emu_path_type_t type, const char *_romPath)
 
 bool rg_emu_load_state(int slot)
 {
-    if (!currentApp.romPath || !currentApp.loadState)
+    if (!currentApp.romPath || !currentApp.handlers.loadState)
     {
-        printf("%s: No game/emulator loaded...\n", __func__);
+        RG_LOGE("No game/emulator loaded...\n");
         return false;
     }
 
-    printf("%s: Loading state %d.\n", __func__, slot);
+    RG_LOGI("Loading state %d.\n", slot);
 
-    rg_display_show_hourglass();
+    rg_gui_draw_hourglass();
     rg_spi_lock_acquire(SPI_LOCK_SDCARD);
 
+    // Disable input watchdog
+    inputTimeout = -1;
+
     char *pathName = rg_emu_get_path(EMU_PATH_SAVE_STATE, currentApp.romPath);
-    bool success = (*currentApp.loadState)(pathName);
+    bool success = (*currentApp.handlers.loadState)(pathName);
+
+    inputTimeout = INPUT_TIMEOUT;
 
     rg_spi_lock_release(SPI_LOCK_SDCARD);
 
     if (!success)
     {
-        printf("%s: Load failed!\n", __func__);
+        RG_LOGE("Load failed!\n");
     }
 
     free(pathName);
@@ -468,16 +486,16 @@ bool rg_emu_load_state(int slot)
 
 bool rg_emu_save_state(int slot)
 {
-    if (!currentApp.romPath || !currentApp.saveState)
+    if (!currentApp.romPath || !currentApp.handlers.saveState)
     {
-        printf("%s: No game/emulator loaded...\n", __func__);
+        RG_LOGE("No game/emulator loaded...\n");
         return false;
     }
 
-    printf("%s: Saving state %d.\n", __func__, slot);
+    RG_LOGI("Saving state %d.\n", slot);
 
     rg_system_set_led(1);
-    rg_display_show_hourglass();
+    rg_gui_draw_hourglass();
     rg_spi_lock_acquire(SPI_LOCK_SDCARD);
 
     char *saveName = rg_emu_get_path(EMU_PATH_SAVE_STATE, currentApp.romPath);
@@ -486,7 +504,10 @@ bool rg_emu_save_state(int slot)
 
     bool success = false;
 
-    if ((*currentApp.saveState)(tempName))
+    // Disable input watchdog
+    inputTimeout = -1;
+
+    if ((*currentApp.handlers.saveState)(tempName))
     {
         rename(saveName, backName);
 
@@ -499,12 +520,14 @@ bool rg_emu_save_state(int slot)
 
     unlink(tempName);
 
+    inputTimeout = INPUT_TIMEOUT;
+
     rg_spi_lock_release(SPI_LOCK_SDCARD);
     rg_system_set_led(0);
 
     if (!success)
     {
-        printf("%s: Save failed!\n", __func__);
+        RG_LOGE("Save failed!\n");
         rg_gui_alert("Save failed", NULL);
     }
 
@@ -515,6 +538,17 @@ bool rg_emu_save_state(int slot)
     return success;
 }
 
+bool rg_emu_reset(int hard)
+{
+    if (!currentApp.romPath || !currentApp.handlers.reset)
+    {
+        RG_LOGE("No game/emulator loaded...\n");
+        return false;
+    }
+
+    return (*currentApp.handlers.reset)(hard);
+}
+
 void rg_system_restart()
 {
     // FIX ME: Ensure the boot loader points to us
@@ -523,10 +557,10 @@ void rg_system_restart()
 
 void rg_system_switch_app(const char *app)
 {
-    printf("%s: Switching to app '%s'.\n", __func__, app ? app : "NULL");
+    RG_LOGI("Switching to app '%s'.\n", app ? app : "NULL");
 
     rg_display_clear(0);
-    rg_display_show_hourglass();
+    rg_gui_draw_hourglass();
 
     rg_audio_deinit();
     rg_sdcard_unmount();
@@ -556,12 +590,12 @@ void rg_system_set_boot_app(const char *app)
         RG_PANIC("Unable to set boot app!");
     }
 
-    printf("%s: Boot partition set to %d '%s'\n", __func__, partition->subtype, partition->label);
+    RG_LOGI("Boot partition set to %d '%s'\n", partition->subtype, partition->label);
 }
 
 void rg_system_panic(const char *reason, const char *function, const char *file)
 {
-    printf("*** PANIC: %s\n  *** FUNCTION: %s\n  *** FILE: %s\n", reason, function, file);
+    RG_LOGX("*** PANIC: %s\n  *** FUNCTION: %s\n  *** FILE: %s\n", reason, function, file);
 
     strcpy(panicTrace->message, reason);
     strcpy(panicTrace->file, file);
@@ -574,14 +608,14 @@ void rg_system_panic(const char *reason, const char *function, const char *file)
 
 void rg_system_halt()
 {
-    printf("%s: Halting system!\n", __func__);
+    RG_LOGI("Halting system!\n");
     vTaskSuspendAll();
     while (1);
 }
 
 void rg_system_sleep()
 {
-    printf("%s: Going to sleep!\n", __func__);
+    RG_LOGI("Going to sleep!\n");
 
     // Wait for button release
     rg_input_wait_for_key(GAMEPAD_KEY_MENU, false);
@@ -665,7 +699,7 @@ bool rg_mkdir(const char *dir)
             if (*p == '/') {
                 *p = 0;
                 if (strlen(temp) > 0) {
-                    printf("%s: Creating %s\n", __func__, temp);
+                    RG_LOGI("Creating %s\n", temp);
                     mkdir(temp, 0777);
                 }
                 *p = '/';
@@ -678,7 +712,7 @@ bool rg_mkdir(const char *dir)
 
     if (ret == 0)
     {
-        printf("%s: Folder created %s\n", __func__, dir);
+        RG_LOGI("Folder created %s\n", dir);
     }
 
     rg_spi_lock_release(SPI_LOCK_SDCARD);
@@ -786,7 +820,7 @@ void *rg_alloc(size_t size, uint32_t mem_type)
 
     void *ptr = heap_caps_calloc(1, size, caps);
 
-    printf("RG_ALLOC: SIZE: %u  [SPIRAM: %u; 32BIT: %u; DMA: %u]  PTR: %p\n",
+    RG_LOGX("[RG_ALLOC] SIZE: %u  [SPIRAM: %u; 32BIT: %u; DMA: %u]  PTR: %p\n",
             size, (caps & MALLOC_CAP_SPIRAM) != 0, (caps & MALLOC_CAP_32BIT) != 0,
             (caps & MALLOC_CAP_DMA) != 0, ptr);
 
@@ -798,11 +832,11 @@ void *rg_alloc(size_t size, uint32_t mem_type)
         ptr = heap_caps_calloc(1, size, caps & ~(MALLOC_CAP_SPIRAM|MALLOC_CAP_INTERNAL));
         if (!ptr)
         {
-            printf("RG_ALLOC: ^-- Allocation failed! (available: %d)\n", availaible);
+            RG_LOGX("[RG_ALLOC] ^-- Allocation failed! (available: %d)\n", availaible);
             RG_PANIC("Memory allocation failed!");
         }
 
-        printf("RG_ALLOC: ^-- CAPS not fully met! (available: %d)\n", availaible);
+        RG_LOGX("[RG_ALLOC] ^-- CAPS not fully met! (available: %d)\n", availaible);
     }
 
     return ptr;

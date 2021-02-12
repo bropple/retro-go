@@ -18,7 +18,7 @@ static void Op##OP (void) \
 static void Op##OP (void) \
 { \
 	uint16	val = S9xGetWord(ADDR(READ), WRAP); \
-	OpenBus = (uint8) (val >> 8); \
+	OpenBus = (val >> 8); \
 	FUNC(val); \
 }
 
@@ -33,7 +33,7 @@ static void Op##OP (void) \
 	else \
 	{ \
 		uint16	val = S9xGetWord(ADDR(READ), WRAP); \
-		OpenBus = (uint8) (val >> 8); \
+		OpenBus = (val >> 8); \
 		FUNC(val); \
 	} \
 }
@@ -98,17 +98,17 @@ mOPC(OP, Memory, ADDR, WRAP, FUNC)
 #define bOP(OP, REL, COND, CHK, E) \
 static void Op##OP (void) \
 { \
-	pair	newPC; \
-	newPC.W = REL(JUMP); \
+	int8 offset = REL(JUMP);\
 	if (COND) \
 	{ \
+		uint16 newPC = (int16)Registers.PCw + offset; \
 		AddCycles(ONE_CYCLE); \
-		if (E && Registers.PCh != newPC.B.h) \
+		if (E && Registers.PCh != (newPC >> 8)) \
 			AddCycles(ONE_CYCLE); \
-		if ((Registers.PCw & ~MEMMAP_MASK) != (newPC.W & ~MEMMAP_MASK)) \
-			S9xSetPCBase(ICPU.ShiftedPB + newPC.W); \
+		if ((Registers.PCw & ~MEMMAP_MASK) != (newPC & ~MEMMAP_MASK)) \
+			S9xSetPCBase(ICPU.ShiftedPB + newPC); \
 		else \
-			Registers.PCw = newPC.W; \
+			Registers.PCw = newPC; \
 	} \
 }
 
@@ -669,6 +669,13 @@ static inline void TRB8 (uint32 OpAddress)
 	AddCycles(ONE_CYCLE);
 	S9xSetByte(Work8, OpAddress);
 	OpenBus = Work8;
+}
+
+static inline void S9xFixCycles (void)
+{
+	// 0bMX
+	const S9xOpcode *OpcodeSets[4] = {S9xOpcodesM0X0, S9xOpcodesM0X1, S9xOpcodesM1X0, S9xOpcodesM1X1};
+	ICPU.S9xOpcodes = CheckEmulation() ? S9xOpcodesSlow : OpcodeSets[(Registers.PL >> 4) & 3];
 }
 
 #endif

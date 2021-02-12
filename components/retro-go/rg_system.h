@@ -32,18 +32,26 @@ extern "C" {
 #include "rg_i2cdev.h"
 
 typedef bool (*state_handler_t)(char *pathName);
+typedef bool (*reset_handler_t)(bool hard);
+
+typedef struct
+{
+    state_handler_t loadState;
+    state_handler_t saveState;
+    reset_handler_t reset;
+    netplay_callback_t netplay;
+} rg_emu_proc_t;
 
 typedef struct
 {
     uint32_t id;
-    uint32_t gameId;
     const char *romPath;
-    state_handler_t loadState;
-    state_handler_t saveState;
     int32_t speedupEnabled;
     int32_t refreshRate;
     int32_t sampleRate;
     int32_t startAction;
+    void *mainTaskHandle;
+    rg_emu_proc_t handlers;
 } rg_app_desc_t;
 
 typedef enum
@@ -89,6 +97,7 @@ typedef struct
     uint32_t freeMemoryExt;
     uint32_t freeBlockInt;
     uint32_t freeBlockExt;
+    uint32_t freeStackMain;
 } runtime_stats_t;
 
 i2c_dev_t rg_system_init(int app_id, int sampleRate); //needs to return i2c_dev_t to make the RTC struct available to the system. Doesn't need to be used for every emu...
@@ -107,10 +116,11 @@ runtime_stats_t rg_system_get_stats();
 void rg_system_time_init();
 void rg_system_time_save();
 
-void rg_emu_init(state_handler_t load, state_handler_t save, netplay_callback_t netplay_cb);
+void rg_emu_init(rg_emu_proc_t handlers);
 char *rg_emu_get_path(emu_path_type_t type, const char *romPath);
 bool rg_emu_save_state(int slot);
 bool rg_emu_load_state(int slot);
+bool rg_emu_reset(int hard);
 
 void rg_spi_lock_acquire(spi_lock_res_t);
 void rg_spi_lock_release(spi_lock_res_t);
@@ -149,7 +159,7 @@ void rg_rtc_debug(struct tm rtcinfo);
 
 // Functions from esp-idf, we don't include their header but they will be linked
 extern int64_t esp_timer_get_time();
-extern void heap_caps_malloc_extmem_enable(size_t limit);
+extern uint32_t crc32_le(uint32_t crc, const uint8_t * buf, uint32_t len);
 
 // long microseconds
 #define get_frame_time(refresh_rate) (1000000 / (refresh_rate))
@@ -164,6 +174,13 @@ extern void heap_caps_malloc_extmem_enable(size_t limit);
 // This should really support printf format...
 #define RG_PANIC(x) rg_system_panic(x, __FUNCTION__, __FILE__)
 #define RG_ASSERT(cond, x) do { if (!(cond)) rg_system_panic(x, __FUNCTION__, __FILE__); } while(0);
+
+#define RG_LOGX(x, ...) printf(x, ## __VA_ARGS__)
+#define RG_LOGE(x, ...) printf("!! %s: " x, __func__, ## __VA_ARGS__)
+#define RG_LOGW(x, ...) printf(" ! %s: " x, __func__, ## __VA_ARGS__)
+#define RG_LOGI(x, ...) printf("%s: " x, __func__, ## __VA_ARGS__)
+//#define RG_LOGD(x, ...) printf("> %s: " x, __func__, ## __VA_ARGS__)
+#define RG_LOGD(x...) {}
 
 // Attributes
 

@@ -24,6 +24,7 @@ static long skipFrames = 0;
 
 static bool consoleIsGG = false;
 static bool consoleIsSMS = false;
+static rg_app_desc_t *app;
 
 static gamepad_state_t joystick1;
 static gamepad_state_t *localJoystick = &joystick1;
@@ -76,7 +77,7 @@ static void netplay_callback(netplay_event_t event, void *arg)
 #endif
 }
 
-static bool SaveState(char *pathName)
+static bool save_state(char *pathName)
 {
     FILE* f = fopen(pathName, "w");
     if (f)
@@ -86,7 +87,7 @@ static bool SaveState(char *pathName)
         char *filename = rg_emu_get_path(EMU_PATH_SCREENSHOT, 0);
         if (filename)
         {
-            rg_display_save_frame(filename, currentUpdate, 160.f / currentUpdate->width);
+            rg_display_save_frame(filename, currentUpdate, 160, 0);
             rg_free(filename);
         }
         return true;
@@ -94,7 +95,7 @@ static bool SaveState(char *pathName)
     return false;
 }
 
-static bool LoadState(char *pathName)
+static bool load_state(char *pathName)
 {
     FILE* f = fopen(pathName, "r");
     if (f)
@@ -107,10 +108,25 @@ static bool LoadState(char *pathName)
     return false;
 }
 
+static bool reset_emulation(bool hard)
+{
+    system_reset();
+    return true;
+}
+
 void app_main(void)
 {
+    rg_emu_proc_t handlers = {
+        .loadState = &load_state,
+        .saveState = &save_state,
+        .netplay = &netplay_callback,
+        .reset = &reset_emulation,
+    };
+
     rg_system_init(APP_ID, AUDIO_SAMPLE_RATE);
-    rg_emu_init(&LoadState, &SaveState, &netplay_callback);
+    rg_emu_init(handlers);
+
+    app = rg_system_get_app();
 
     frames[0].flags = RG_PIXEL_PAL|RG_PIXEL_565|RG_PIXEL_BE;
     frames[0].pixel_mask = PIXEL_MASK;
@@ -122,9 +138,6 @@ void app_main(void)
     frames[0].palette = (uint16_t*)&palettes[0];
     frames[1].palette = (uint16_t*)&palettes[1];
 
-    // Load ROM
-    rg_app_desc_t *app = rg_system_get_app();
-
     system_reset_config();
 
     if (!load_rom(app->romPath))
@@ -135,7 +148,6 @@ void app_main(void)
     bitmap.width = SMS_WIDTH;
     bitmap.height = SMS_HEIGHT;
     bitmap.pitch = bitmap.width;
-    //bitmap.depth = 8;
     bitmap.data = currentUpdate->buffer;
 
     option.sndrate = AUDIO_SAMPLE_RATE;
@@ -153,6 +165,10 @@ void app_main(void)
 
     // if (consoleIsSMS) rg_system_set_app_id(APP_ID + 1);
     // if (consoleIsGG)  rg_system_set_app_id(APP_ID + 2);
+    app->refreshRate = (sms.display == DISPLAY_NTSC) ? 60 : 50;
+
+    // if (IS_SMS) rg_system_set_app_id(APP_ID + 1);
+    // if (IS_GG)  rg_system_set_app_id(APP_ID + 2);
 
     frames[0].width  = frames[1].width  = bitmap.viewport.w;
     frames[0].height = frames[1].height = bitmap.viewport.h;
@@ -164,6 +180,9 @@ void app_main(void)
     {
         rg_emu_load_state(0);
     }
+
+    long frameTime = get_frame_time(app->refreshRate);
+    long skipFrames = 0;
 
     long frameTime = get_frame_time(refreshRate);
     bool fullFrame = false;
@@ -181,6 +200,7 @@ void app_main(void)
 
         int64_t startTime = get_elapsed_time();
         bool drawFrame = !skipFrames;
+        bool fullFrame = true;
 
         input.pad[0] = 0x00;
         input.pad[1] = 0x00;
@@ -196,12 +216,12 @@ void app_main(void)
             if (remoteJoystick->values[GAMEPAD_KEY_RIGHT]) input.pad[1] |= INPUT_RIGHT;
             if (remoteJoystick->values[GAMEPAD_KEY_A])     input.pad[1] |= INPUT_BUTTON2;
             if (remoteJoystick->values[GAMEPAD_KEY_B])     input.pad[1] |= INPUT_BUTTON1;
-            if (consoleIsSMS)
+            if (IS_SMS)
             {
                 if (remoteJoystick->values[GAMEPAD_KEY_START])  input.system |= INPUT_PAUSE;
                 if (remoteJoystick->values[GAMEPAD_KEY_SELECT]) input.system |= INPUT_START;
             }
-            else if (consoleIsGG)
+            else if (IS_GG)
             {
                 if (remoteJoystick->values[GAMEPAD_KEY_START])  input.system |= INPUT_START;
                 if (remoteJoystick->values[GAMEPAD_KEY_SELECT]) input.system |= INPUT_PAUSE;
@@ -209,23 +229,23 @@ void app_main(void)
         }
         #endif
 
-    	if (localJoystick->values[GAMEPAD_KEY_UP])    input.pad[0] |= INPUT_UP;
-    	if (localJoystick->values[GAMEPAD_KEY_DOWN])  input.pad[0] |= INPUT_DOWN;
-    	if (localJoystick->values[GAMEPAD_KEY_LEFT])  input.pad[0] |= INPUT_LEFT;
-    	if (localJoystick->values[GAMEPAD_KEY_RIGHT]) input.pad[0] |= INPUT_RIGHT;
-    	if (localJoystick->values[GAMEPAD_KEY_A])     input.pad[0] |= INPUT_BUTTON2;
-    	if (localJoystick->values[GAMEPAD_KEY_B])     input.pad[0] |= INPUT_BUTTON1;
+        if (localJoystick->values[GAMEPAD_KEY_UP])    input.pad[0] |= INPUT_UP;
+        if (localJoystick->values[GAMEPAD_KEY_DOWN])  input.pad[0] |= INPUT_DOWN;
+        if (localJoystick->values[GAMEPAD_KEY_LEFT])  input.pad[0] |= INPUT_LEFT;
+        if (localJoystick->values[GAMEPAD_KEY_RIGHT]) input.pad[0] |= INPUT_RIGHT;
+        if (localJoystick->values[GAMEPAD_KEY_A])     input.pad[0] |= INPUT_BUTTON2;
+        if (localJoystick->values[GAMEPAD_KEY_B])     input.pad[0] |= INPUT_BUTTON1;
 
-		if (consoleIsSMS)
-		{
-			if (localJoystick->values[GAMEPAD_KEY_START])  input.system |= INPUT_PAUSE;
-			if (localJoystick->values[GAMEPAD_KEY_SELECT]) input.system |= INPUT_START;
-		}
-		else if (consoleIsGG)
-		{
-			if (localJoystick->values[GAMEPAD_KEY_START])  input.system |= INPUT_START;
-			if (localJoystick->values[GAMEPAD_KEY_SELECT]) input.system |= INPUT_PAUSE;
-		}
+        if (IS_SMS)
+        {
+            if (localJoystick->values[GAMEPAD_KEY_START])  input.system |= INPUT_PAUSE;
+            if (localJoystick->values[GAMEPAD_KEY_SELECT]) input.system |= INPUT_START;
+        }
+        else if (IS_GG)
+        {
+            if (localJoystick->values[GAMEPAD_KEY_START])  input.system |= INPUT_START;
+            if (localJoystick->values[GAMEPAD_KEY_SELECT]) input.system |= INPUT_PAUSE;
+        }
         else // Coleco
         {
             coleco.keypad[0] = 0xff;

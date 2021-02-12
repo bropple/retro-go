@@ -27,11 +27,10 @@
 #define _OSD_H_
 
 #include <nofrendo.h>
-#include <bitmap.h>
 
 /* video */
 extern void osd_setpalette(rgb_t *pal);
-extern void osd_blitscreen(bitmap_t *bmp);
+extern void osd_blitscreen(uint8 *bmp);
 
 /* control */
 extern int osd_init(void);
@@ -44,11 +43,10 @@ extern void osd_vsync(void);
 extern void osd_getinput(void);
 
 /* get rom data */
-extern uint32_t osd_getromcrc(void);
 extern uint32_t osd_getromsize(void);
 extern uint8_t *osd_getromdata(void);
 
-/* Log output */
-extern void osd_logprint(int type, char *message);
+/* Log output, printf-style format */
+extern void osd_log(int type, const char *format, ...);
 
 #endif /* _OSD_H_ */

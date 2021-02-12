@@ -6,13 +6,12 @@
 
 #include <assert.h>
 #include "snes9x.h"
-#include "memmap.h"
+#include "memory.h"
 #include "dma.h"
 #include "apu/apu.h"
 #include "snapshot.h"
 #include "controls.h"
 #include "display.h"
-#include "language.h"
 #include "gfx.h"
 
 #ifndef min
@@ -81,39 +80,6 @@ enum
 	#field \
 }
 
-#define OBSOLETE_INT_ENTRY(save_version_introduced, save_version_removed, field) \
-{ \
-	DUMMY(field), \
-	0, \
-	sizeof(((struct Obsolete *) NULL)->field), \
-	INT_V, \
-	save_version_introduced, \
-	save_version_removed, \
-	#field \
-}
-
-#define OBSOLETE_ARRAY_ENTRY(save_version_introduced, save_version_removed, field, count, elemType) \
-{ \
-	DUMMY(field), \
-	0, \
-	count, \
-	elemType, \
-	save_version_introduced, \
-	save_version_removed, \
-	#field \
-}
-
-#define OBSOLETE_POINTER_ENTRY(save_version_introduced, save_version_removed, field, relativeToField) \
-{ \
-	DUMMY(field), \
-	DUMMY(relativeToField), \
-	4, \
-	POINTER_V, \
-	save_version_introduced, \
-	save_version_removed, \
-	#field \
-}
-
 #define DELETED_INT_ENTRY(save_version_introduced, save_version_removed, field, size) \
 { \
 	DELETED(field), \
@@ -162,10 +128,8 @@ static struct Obsolete
 static const FreezeData	SnapCPU[] =
 {
 	INT_ENTRY(6, Cycles),
-	INT_ENTRY(6, PrevCycles),
 	INT_ENTRY(6, V_Counter),
 	INT_ENTRY(6, Flags),
-	OBSOLETE_INT_ENTRY(6, 7, CPU_IRQActive),
 	INT_ENTRY(6, IRQPending),
 	INT_ENTRY(6, MemSpeed),
 	INT_ENTRY(6, MemSpeedx2),
@@ -178,14 +142,12 @@ static const FreezeData	SnapCPU[] =
 	INT_ENTRY(6, WhichEvent),
 	INT_ENTRY(6, NextEvent),
 	INT_ENTRY(6, WaitingForInterrupt),
-	DELETED_INT_ENTRY(6, 7, WaitAddress, 4),
-	DELETED_INT_ENTRY(6, 7, WaitCounter, 4),
-	DELETED_INT_ENTRY(6, 7, PBPCAtOpcodeStart, 4),
 	INT_ENTRY(7, NMIPending),
 	INT_ENTRY(7, IRQLine),
-	INT_ENTRY(7, IRQTransition),
 	INT_ENTRY(7, IRQLastState),
-	INT_ENTRY(7, IRQExternal)
+	INT_ENTRY(6, NMITriggerPos),
+	INT_ENTRY(6, IRQFlagChanging),
+	INT_ENTRY(6, NextIRQTimer)
 };
 
 #undef STRUCT
@@ -281,8 +243,6 @@ static const FreezeData	SnapPPU[] =
 	INT_ENTRY(6, VBeamFlip),
 	INT_ENTRY(6, HBeamPosLatched),
 	INT_ENTRY(6, VBeamPosLatched),
-	INT_ENTRY(6, GunHLatch),
-	INT_ENTRY(6, GunVLatch),
 	INT_ENTRY(6, HVBeamCounterLatched),
 	INT_ENTRY(6, Mode7HFlip),
 	INT_ENTRY(6, Mode7VFlip),
@@ -352,32 +312,6 @@ static const FreezeData	SnapDMA[] =
 	INT_ENTRY(6, dma[N].DoTransfer)
 	O(0), O(1), O(2), O(3), O(4), O(5), O(6), O(7)
 #undef O
-};
-
-#undef STRUCT
-#define STRUCT	struct STimings
-
-static const FreezeData	SnapTimings[] =
-{
-	INT_ENTRY(6, H_Max_Master),
-	INT_ENTRY(6, H_Max),
-	INT_ENTRY(6, V_Max_Master),
-	INT_ENTRY(6, V_Max),
-	INT_ENTRY(6, HBlankStart),
-	INT_ENTRY(6, HBlankEnd),
-	INT_ENTRY(6, HDMAInit),
-	INT_ENTRY(6, HDMAStart),
-	INT_ENTRY(6, NMITriggerPos),
-	INT_ENTRY(6, WRAMRefreshPos),
-	INT_ENTRY(6, RenderPos),
-	INT_ENTRY(6, InterlaceField),
-	INT_ENTRY(6, DMACPUSync),
-	INT_ENTRY(6, NMIDMADelay),
-	INT_ENTRY(6, IRQFlagChanging),
-	INT_ENTRY(6, APUSpeedup),
-	INT_ENTRY(7, IRQTriggerCycles),
-	INT_ENTRY(7, APUAllowTimeOverflow),
-	INT_ENTRY(11, NextIRQTimer)
 };
 
 #undef STRUCT
@@ -617,105 +551,25 @@ static void SkipBlockWithName(STREAM stream, const char *name);
 
 // QuickSave
 
-uint32 S9xFreezeSize()
-{
-    nulStream stream;
-    S9xFreezeToStream(&stream);
-    return stream.size();
-}
-
 bool8 S9xFreezeGame (const char *filename)
 {
 	STREAM	stream = NULL;
 
-	if (S9xOpenSnapshotFile(filename, FALSE, &stream))
+	if (!S9xOpenSnapshotFile(filename, FALSE, &stream))
 	{
-		S9xFreezeToStream(stream);
-		S9xCloseSnapshotFile(stream);
-
-		// const char *base = S9xBasename(filename);
-		// sprintf(String, SAVE_INFO_SNAPSHOT " %s", base);
-
-		// S9xMessage(S9X_INFO, S9X_FREEZE_FILE_INFO, String);
-
-		return (TRUE);
+		return (FALSE);
 	}
 
-	return (FALSE);
-}
+	// We don't have enough RAM to fit the sound snapshot at the moment
+	// So we're naughty and used the tile cache data which is about 256K.
+	uint8 *soundsnapshot = (uint8 *)IPPU.TileCacheData; // new uint8[SPC_SAVE_STATE_BLOCK_SIZE];
+	memset(IPPU.TileCache, 0, sizeof(IPPU.TileCache));
 
-// QuickLoad
+	sprintf(String, "%s:%04d\n", SNAPSHOT_MAGIC, SNAPSHOT_VERSION);
+	WRITE_STREAM(String, strlen(String), stream);
 
-bool8 S9xUnfreezeGame (const char *filename)
-{
-	STREAM	stream = NULL;
-
-	const char	*base = S9xBasename(filename);
-
-	if (S9xOpenSnapshotFile(filename, TRUE, &stream))
-	{
-		int	result;
-
-		result = S9xUnfreezeFromStream(stream);
-		S9xCloseSnapshotFile(stream);
-
-		if (result != SUCCESS)
-		{
-			switch (result)
-			{
-				case WRONG_FORMAT:
-					S9xMessage(S9X_ERROR, S9X_WRONG_FORMAT, SAVE_ERR_WRONG_FORMAT);
-					break;
-
-				case WRONG_VERSION:
-					S9xMessage(S9X_ERROR, S9X_WRONG_VERSION, SAVE_ERR_WRONG_VERSION);
-					break;
-
-				case WRONG_MOVIE_SNAPSHOT:
-					S9xMessage(S9X_ERROR, S9X_WRONG_MOVIE_SNAPSHOT, MOVIE_ERR_SNAPSHOT_WRONG_MOVIE);
-					break;
-
-				case NOT_A_MOVIE_SNAPSHOT:
-					S9xMessage(S9X_ERROR, S9X_NOT_A_MOVIE_SNAPSHOT, MOVIE_ERR_SNAPSHOT_NOT_MOVIE);
-					break;
-
-				case SNAPSHOT_INCONSISTENT:
-					S9xMessage(S9X_ERROR, S9X_SNAPSHOT_INCONSISTENT, MOVIE_ERR_SNAPSHOT_INCONSISTENT);
-					break;
-
-				case FILE_NOT_FOUND:
-				default:
-					sprintf(String, SAVE_ERR_ROM_NOT_FOUND, base);
-					S9xMessage(S9X_ERROR, S9X_ROM_NOT_FOUND, String);
-					break;
-			}
-
-			return (FALSE);
-		}
-
-		sprintf(String, SAVE_INFO_LOAD " %s", base);
-
-		S9xMessage(S9X_INFO, S9X_FREEZE_FILE_INFO, String);
-
-		return (TRUE);
-	}
-
-	sprintf(String, SAVE_ERR_SAVE_NOT_FOUND, base);
-	S9xMessage(S9X_INFO, S9X_FREEZE_FILE_INFO, String);
-
-	return (FALSE);
-}
-
-void S9xFreezeToStream (STREAM stream)
-{
-	char	buffer[2048];
-	uint8	*soundsnapshot = new uint8[SPC_SAVE_STATE_BLOCK_SIZE];
-
-	sprintf(buffer, "%s:%04d\n", SNAPSHOT_MAGIC, SNAPSHOT_VERSION);
-	WRITE_STREAM(buffer, strlen(buffer), stream);
-
-	sprintf(buffer, "NAM:%06d:%s%c", (int) strlen(Memory.ROMName) + 1, Memory.ROMName, 0);
-	WRITE_STREAM(buffer, strlen(buffer) + 1, stream);
+	sprintf(String, "NAM:%06d:%s%c", (int) strlen(Memory.ROMName) + 1, Memory.ROMName, 0);
+	WRITE_STREAM(String, strlen(String) + 1, stream);
 
 	FreezeStruct(stream, "CPU", &CPU, SnapCPU, COUNT(SnapCPU));
 
@@ -732,14 +586,13 @@ void S9xFreezeToStream (STREAM stream)
 
 	FreezeBlock (stream, "RAM", Memory.RAM, 0x20000);
 
-	FreezeBlock (stream, "SRA", Memory.SRAM, 0x20000);
+	if (Memory.SRAMSize > 0)
+		FreezeBlock(stream, "SRA", Memory.SRAM, Memory.SRAMBytes);
 
-	FreezeBlock (stream, "FIL", Memory.FillRAM, 0x8000);
+	FreezeBlock (stream, "FIL", Memory.FillRAM + 0x2000, 0x2800);
 
 	S9xAPUSaveState(soundsnapshot);
 	FreezeBlock (stream, "SND", soundsnapshot, SPC_SAVE_STATE_BLOCK_SIZE);
-
-	FreezeStruct(stream, "TIM", &Timings, SnapTimings, COUNT(SnapTimings));
 
 	if (Settings.DSP == 1)
 		FreezeStruct(stream, "DP1", &DSP1, SnapDSP1, COUNT(SnapDSP1));
@@ -747,11 +600,27 @@ void S9xFreezeToStream (STREAM stream)
 	if (Settings.DSP == 2)
 		FreezeStruct(stream, "DP2", &DSP2, SnapDSP2, COUNT(SnapDSP2));
 
-	delete [] soundsnapshot;
+	S9xCloseSnapshotFile(stream);
+
+	sprintf(String, SAVE_INFO_SNAPSHOT " %s", S9xBasename(filename));
+	S9xMessage(S9X_INFO, S9X_FREEZE_FILE_INFO, String);
+
+	return (TRUE);
 }
 
-int S9xUnfreezeFromStream (STREAM stream)
+// QuickLoad
+
+bool8 S9xUnfreezeGame (const char *filename)
 {
+	STREAM	stream = NULL;
+
+	if (!S9xOpenSnapshotFile(filename, TRUE, &stream))
+	{
+		sprintf(String, SAVE_ERR_SAVE_NOT_FOUND, S9xBasename(filename));
+		S9xMessage(S9X_INFO, S9X_FREEZE_FILE_INFO, String);
+		return (FALSE);
+	}
+
 	int		result = SUCCESS;
 	int		version, len;
 	char	buffer[PATH_MAX + 1];
@@ -774,7 +643,10 @@ int S9xUnfreezeFromStream (STREAM stream)
 	uint32 old_flags     = CPU.Flags;
 	struct SDMASnapshot	dma_snap;
 
-	uint8	*local_apu_sound     = NULL;
+	// We don't have enough RAM to fit the sound snapshot at the moment
+	// So we're naughty and used the tile cache data which is about 256K.
+	uint8 *soundsnapshot = (uint8 *)IPPU.TileCacheData;
+	memset(IPPU.TileCache, 0, sizeof(IPPU.TileCache));
 
 	do
 	{
@@ -802,19 +674,15 @@ int S9xUnfreezeFromStream (STREAM stream)
 		if (result != SUCCESS)
 			break;
 
-		result = UnfreezeBlock(stream, "SRA", Memory.SRAM, 0x20000);
+		result = UnfreezeBlock(stream, "SRA", Memory.SRAM, Memory.SRAMBytes);
+		if (result != SUCCESS && Memory.SRAMSize > 0)
+			break;
+
+		result = UnfreezeBlock(stream, "FIL", Memory.FillRAM + 0x2000, 0x2800);
 		if (result != SUCCESS)
 			break;
 
-		result = UnfreezeBlock(stream, "FIL", Memory.FillRAM, 0x8000);
-		if (result != SUCCESS)
-			break;
-
-		result = UnfreezeBlockCopy (stream, "SND", &local_apu_sound, SPC_SAVE_STATE_BLOCK_SIZE);
-		if (result != SUCCESS)
-			break;
-
-		result = UnfreezeStruct(stream, "TIM", &Timings, SnapTimings, COUNT(SnapTimings), version);
+		result = UnfreezeBlock (stream, "SND", soundsnapshot, SPC_SAVE_STATE_BLOCK_SIZE);
 		if (result != SUCCESS)
 			break;
 
@@ -835,14 +703,14 @@ int S9xUnfreezeFromStream (STREAM stream)
 		//Do not call this if you have written directly to "Memory." arrays
 		// S9xReset();
 
-		S9xAPULoadState(local_apu_sound);
+		S9xAPULoadState(soundsnapshot);
 
 		CPU.Flags |= old_flags & (DEBUG_MODE_FLAG | TRACE_FLAG | SINGLE_STEP_FLAG | FRAME_ADVANCE_FLAG);
 		ICPU.ShiftedPB = Registers.PB << 16;
 		ICPU.ShiftedDB = Registers.DB << 16;
+		ICPU.S9xOpcodes = S9xOpcodesSlow;
 		S9xSetPCBase(Registers.PBPC);
 		S9xUnpackStatus();
-		S9xFixCycles();
 
 		for (int d = 0; d < 8; d++)
 			DMA[d] = dma_snap.dma[d];
@@ -851,23 +719,40 @@ int S9xUnfreezeFromStream (STREAM stream)
 		CPU.InDMAorHDMA = CPU.InWRAMDMAorHDMA = FALSE;
 		CPU.HDMARanInDMA = 0;
 
-		S9xFixColourBrightness();
-		S9xBuildDirectColourMaps();
-		IPPU.ColorsChanged = TRUE;
 		IPPU.OBJChanged = TRUE;
 		IPPU.RenderThisFrame = TRUE;
 
-		GFX.InterlaceFrame = Timings.InterlaceField;
-
 		S9xGraphicsScreenResize();
-
-		if (GFX.Screen)
-			memset(GFX.Screen, 0, GFX.ScreenSize);
 	}
 
-	if (local_apu_sound)		delete [] local_apu_sound;
+	S9xCloseSnapshotFile(stream);
 
-	return (result);
+	if (result != SUCCESS)
+	{
+		switch (result)
+		{
+			case WRONG_FORMAT:
+				S9xMessage(S9X_ERROR, S9X_WRONG_FORMAT, SAVE_ERR_WRONG_FORMAT);
+				break;
+
+			case WRONG_VERSION:
+				S9xMessage(S9X_ERROR, S9X_WRONG_VERSION, SAVE_ERR_WRONG_VERSION);
+				break;
+
+			case FILE_NOT_FOUND:
+			default:
+				sprintf(String, SAVE_ERR_ROM_NOT_FOUND, S9xBasename(filename));
+				S9xMessage(S9X_ERROR, S9X_ROM_NOT_FOUND, String);
+				break;
+		}
+
+		return (FALSE);
+	}
+
+	sprintf(String, SAVE_INFO_LOAD " %s", S9xBasename(filename));
+	S9xMessage(S9X_INFO, S9X_FREEZE_FILE_INFO, String);
+
+	return (TRUE);
 }
 
 static int FreezeSize (int size, int type)
@@ -1114,10 +999,7 @@ static int UnfreezeBlock (STREAM stream, const char *name, uint8 *block, int siz
 		len = size;
 	}
 
-	if (!Settings.FastSavestates)
-	{
-		memset(block, 0, size);
-	}
+	memset(block, 0, size);
 
 	if (READ_STREAM(block, len, stream) != (unsigned int) len)
 	{

@@ -484,9 +484,13 @@ static inline void lcd_beginframe()
 	WY = R_WY;
 }
 
-void lcd_reset()
+void lcd_reset(bool hard)
 {
-	memset(&lcd, 0, sizeof(lcd));
+	if (hard)
+	{
+		memset(&lcd, 0, sizeof(lcd));
+	}
+
 	lcd_beginframe();
 	pal_set_dmg(dmg_selected_pal);
 }
@@ -621,7 +625,7 @@ static inline void pal_detect_dmg()
         obp1 = dmg_game_palettes[palette][2];
     }
 
-	printf("pal_detect_dmg: Using GBC palette %d\n", palette);
+	MESSAGE_INFO("Using GBC palette %d\n", palette);
 
 	memcpy(&dmg_pal[0], bgp, 8); // BGP
 	memcpy(&dmg_pal[1], bgp, 8); // BGP

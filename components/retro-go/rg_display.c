@@ -10,7 +10,6 @@
 
 #include "rg_system.h"
 #include "rg_display.h"
-#include "bitmaps/image_hourglass.h"
 
 #define SCREEN_WIDTH  RG_SCREEN_WIDTH
 #define SCREEN_HEIGHT RG_SCREEN_HEIGHT
@@ -160,14 +159,14 @@ backlight_deinit()
 }
 
 static void
-backlight_percentage_set(int value)
+backlight_set_level(int percent)
 {
-    value = RG_MIN(RG_MAX(value, 5), 100);
-
-    int duty = BACKLIGHT_DUTY_MAX * (value * 0.01f);
+    int duty = BACKLIGHT_DUTY_MAX * (RG_MIN(RG_MAX(percent, 5), 100) * 0.01f);
 
     ledc_set_fade_with_time(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, duty, 10);
     ledc_fade_start(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, LEDC_FADE_NO_WAIT);
+
+    RG_LOGI("backlight set to %d%%\n", percent);
 }
 
 static inline uint16_t*
@@ -223,66 +222,6 @@ spi_put_transaction(spi_transaction_t* t)
     }
 
     xSemaphoreGive(spi_count_semaphore);
-}
-
-static inline void
-ili9341_cmd(const uint8_t cmd)
-{
-    spi_transaction_t* t = spi_get_transaction();
-
-    t->length = 8;                     // Command is 8 bits
-    t->tx_data[0] = cmd;               // The data is the cmd itself
-    t->user = (void*)0;                // D/C needs to be set to 0
-    t->flags = SPI_TRANS_USE_TXDATA;
-
-    spi_put_transaction(t);
-}
-
-static inline void
-ili9341_data(const uint8_t *data, size_t len)
-{
-    if (len < 1) return;
-
-    spi_transaction_t* t = spi_get_transaction();
-
-    t->length = len * 8;               // Len is in bytes, transaction length is in bits.
-    t->user = (void*)1;                // D/C needs to be set to 1
-
-    if (len < 5)
-    {
-        memcpy(t->tx_data, data, len);
-        t->flags = SPI_TRANS_USE_TXDATA;
-    }
-    else
-        t->tx_buffer = data;
-
-    spi_put_transaction(t);
-}
-
-static void
-ili9341_init()
-{
-    gpio_set_direction(RG_GPIO_LCD_DC, GPIO_MODE_OUTPUT);
-
-    for (size_t i = 0; ili_init_cmds[i].cmd; ++i)
-    {
-        ili9341_cmd(ili_init_cmds[i].cmd);
-        ili9341_data(ili_init_cmds[i].data, ili_init_cmds[i].databytes & 0x7F);
-        if (ili_init_cmds[i].databytes & 0x80)
-            vTaskDelay(pdMS_TO_TICKS(10));
-    }
-}
-
-static void
-ili9341_deinit()
-{
-    for (size_t i = 0; ili_init_cmds[i].cmd; ++i)
-    {
-        ili9341_cmd(ili_sleep_cmds[i].cmd);
-        ili9341_data(ili_sleep_cmds[i].data, ili_sleep_cmds[i].databytes & 0x7F);
-        if (ili_init_cmds[i].databytes & 0x80)
-            vTaskDelay(pdMS_TO_TICKS(10));
-    }
 }
 
 //This function is called (in irq context!) just before a transmission starts. It will
@@ -370,6 +309,66 @@ spi_initialize()
     xTaskCreatePinnedToCore(&spi_task, "spi_task", 1024 + 768, NULL, 5, NULL, 1);
 }
 
+static inline void
+ili9341_cmd(const uint8_t cmd)
+{
+    spi_transaction_t* t = spi_get_transaction();
+
+    t->length = 8;                     // Command is 8 bits
+    t->tx_data[0] = cmd;               // The data is the cmd itself
+    t->user = (void*)0;                // D/C needs to be set to 0
+    t->flags = SPI_TRANS_USE_TXDATA;
+
+    spi_put_transaction(t);
+}
+
+static inline void
+ili9341_data(const uint8_t *data, size_t len)
+{
+    if (len < 1) return;
+
+    spi_transaction_t* t = spi_get_transaction();
+
+    t->length = len * 8;               // Len is in bytes, transaction length is in bits.
+    t->user = (void*)1;                // D/C needs to be set to 1
+
+    if (len < 5)
+    {
+        memcpy(t->tx_data, data, len);
+        t->flags = SPI_TRANS_USE_TXDATA;
+    }
+    else
+        t->tx_buffer = data;
+
+    spi_put_transaction(t);
+}
+
+static void
+ili9341_init()
+{
+    gpio_set_direction(RG_GPIO_LCD_DC, GPIO_MODE_OUTPUT);
+
+    for (size_t i = 0; ili_init_cmds[i].cmd; ++i)
+    {
+        ili9341_cmd(ili_init_cmds[i].cmd);
+        ili9341_data(ili_init_cmds[i].data, ili_init_cmds[i].databytes & 0x7F);
+        if (ili_init_cmds[i].databytes & 0x80)
+            vTaskDelay(pdMS_TO_TICKS(10));
+    }
+}
+
+static void
+ili9341_deinit()
+{
+    for (size_t i = 0; ili_init_cmds[i].cmd; ++i)
+    {
+        ili9341_cmd(ili_sleep_cmds[i].cmd);
+        ili9341_data(ili_sleep_cmds[i].data, ili_sleep_cmds[i].databytes & 0x7F);
+        if (ili_init_cmds[i].databytes & 0x80)
+            vTaskDelay(pdMS_TO_TICKS(10));
+    }
+}
+
 static void
 send_reset_drawing(int left, int top, int width, int height)
 {
@@ -412,7 +411,7 @@ send_reset_drawing(int left, int top, int width, int height)
     // Memory write continue
     if (height > 1) ili9341_cmd(0x3C);
 
-    // printf("LCD DRAW: left:%d top:%d width:%d height:%d\n", left, top, width, height);
+    RG_LOGD("LCD DRAW: left:%d top:%d width:%d height:%d\n", left, top, width, height);
 }
 
 static inline void
@@ -672,7 +671,6 @@ frame_diff(rg_video_frame_t *frame, rg_video_frame_t *prevFrame)
 
     if (scalingMode && filterMode != RG_DISPLAY_FILTER_OFF)
     {
-        // printf("\nFRAME BEGIN\n");
         for (int y = 0; y < frame->height; ++y)
         {
             if (out_diff[y].width > 0)
@@ -699,19 +697,12 @@ frame_diff(rg_video_frame_t *frame, rg_video_frame_t *prevFrame)
                 if (--left < 0) left = 0;
                 if (++right > frame->width) right = frame->width;
 
-                // while (left > 0 && !frame_filter_column_is_key[left])
-                //     left--;
-
-                // while (right < frame->width -1 && !frame_filter_column_is_key[right])
-                //     right++;
-
                 for (int i = block_start; i <= block_end; i++)
                 {
                     out_diff[i].left = left;
                     out_diff[i].width = right - left;
                 }
 
-                // printf("  Block Y=%d   %dx%d\n", y, right - left + 1, block_end - block_start + 1);
                 y = block_end;
             }
         }
@@ -844,7 +835,7 @@ rg_display_set_scale(int width, int height, double new_ratio)
 
         if (new_width > SCREEN_WIDTH)
         {
-            printf("LCD SCALE: new_width too large: %d, reducing new_height to maintain ratio.\n", new_width);
+            RG_LOGX("[LCD SCALE] new_width too large: %d, reducing new_height to maintain ratio.\n", new_width);
             new_height = SCREEN_HEIGHT * (SCREEN_WIDTH / (double)new_width);
             new_width = SCREEN_WIDTH;
         }
@@ -860,7 +851,7 @@ rg_display_set_scale(int width, int height, double new_ratio)
 
     generate_filter_structures(width, height);
 
-    printf("LCD SCALE: %dx%d@%.3f => %dx%d@%.3f x_inc:%d y_inc:%d x_scale:%.3f y_scale:%.3f x_origin:%d y_origin:%d\n",
+    RG_LOGX("[LCD SCALE] %dx%d@%.3f => %dx%d@%.3f x_inc:%d y_inc:%d x_scale:%.3f y_scale:%.3f x_origin:%d y_origin:%d\n",
            width, height, width/(double)height, new_width, new_height, new_ratio,
            x_inc, y_inc, x_scale, y_scale, x_origin, y_origin);
 }
@@ -917,7 +908,7 @@ void
 rg_display_set_backlight(display_backlight_t level)
 {
     rg_settings_Backlight_set(level);
-    backlight_percentage_set(backlightLevels[level % RG_BACKLIGHT_LEVEL_COUNT]);
+    backlight_set_level(backlightLevels[level % RG_BACKLIGHT_LEVEL_COUNT]);
     backlightLevel = level;
 }
 
@@ -934,48 +925,69 @@ rg_display_force_refresh(void)
 }
 
 bool
-rg_display_save_frame(const char *filename, rg_video_frame_t *frame, double scale)
+rg_display_save_frame(const char *filename, const rg_video_frame_t *frame, int width, int height)
 {
-    // We do not support upscale right now
-    scale = RG_MIN(scale, 1.f);
-
-    LuImage *png = luImageCreate(frame->width * scale, frame->height * scale, 3, 8, 0, 0);
-    if (!png)
-        return false;
-
-    uint8_t *dst = png->data;
-    uint32_t pixel_mask = frame->pixel_mask;
-    uint16_t *palette = frame->palette;
-    double factor = 1 + (1 - scale);
-
-    printf("%s: Rendering frame: %dx%d\n", __func__, png->width, png->height);
-
-    for (size_t y = 0; y < png->height; y++)
+    if (width <= 0 && height <= 0)
     {
-        uint8_t *line = frame->buffer + ((int)(y * factor) * frame->stride);
+        width = frame->width;
+        height = frame->height;
+    }
+    else if (width <= 0)
+    {
+        width = frame->width * ((float)height / frame->height);
+    }
+    else if (height <= 0)
+    {
+        height = frame->height * ((float)width / frame->width);
+    }
 
-        for (size_t x = 0; x < png->width; x++)
+    float step_x = (float)frame->width / width;
+    float step_y = (float)frame->height / height;
+
+    RG_LOGI("Saving frame: %dx%d to PNG %dx%d. Step: X=%.3f Y=%.3f\n",
+        frame->width, frame->height, width, height, step_x, step_y);
+
+    LuImage *png = luImageCreate(width, height, 3, 8, 0, 0);
+    if (!png)
+    {
+        RG_LOGE("LuImage allocation failed!\n");
+        return false;
+    }
+
+    uint8_t *img_ptr = png->data;
+
+    for (int y = 0; y < height; y++)
+    {
+        uint8_t *line = frame->buffer + ((int)(y * step_y) * frame->stride);
+
+        for (int x = 0; x < width; x++)
         {
             uint32_t pixel;
 
             if (frame->flags & RG_PIXEL_PAL)
-                pixel = palette[line[(int)(x * factor)] & pixel_mask];
+                pixel = ((uint16_t*)frame->palette)[line[(int)(x * step_x)] & frame->pixel_mask];
             else
-                pixel = ((uint16_t*)line)[(int)(x * factor)];
+                pixel = ((uint16_t*)line)[(int)(x * step_x)];
 
             if ((frame->flags & RG_PIXEL_LE) == 0) // BE to LE
                 pixel = (pixel << 8) | (pixel >> 8);
 
-            *(dst++) = ((pixel >> 11) & 0x1F) << 3;
-            *(dst++) = ((pixel >> 5) & 0x3F) << 2;
-            *(dst++) = (pixel & 0x1F) << 3;
+            *(img_ptr++) = ((pixel >> 11) & 0x1F) << 3;
+            *(img_ptr++) = ((pixel >> 5) & 0x3F) << 2;
+            *(img_ptr++) = (pixel & 0x1F) << 3;
         }
     }
 
-    bool success = luPngWriteFile(filename, png);
+    bool status = luPngWriteFile(filename, png);
     luImageRelease(png, 0);
 
-    return success;
+    if (status != PNG_OK)
+    {
+        RG_LOGE("luPngWriteFile() failed! %d\n", status);
+        return false;
+    }
+
+    return true;
 }
 
 IRAM_ATTR screen_update_t
@@ -1032,6 +1044,13 @@ rg_display_drain_spi()
 }
 
 void
+rg_display_show_info(const char *text, int timeout_ms)
+{
+    // Overlay a line of text at the bottom of the screen for approximately timeout_ms
+    // It would make more sense in rg_gui, but for efficiency I think here will be best...
+}
+
+void
 rg_display_write(int left, int top, int width, int height, int stride, const uint16_t* buffer)
 {
     rg_display_drain_spi();
@@ -1076,11 +1095,13 @@ rg_display_clear(uint16_t color)
 
     send_reset_drawing(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
 
+    color = (color << 8) | (color >> 8);
+
     for (size_t i = 0; i < SPI_TRANSACTION_COUNT; ++i)
     {
         for (size_t j = 0; j < SPI_TRANSACTION_BUFFER_LENGTH; ++j)
         {
-            spi_buffers[i][j] = color << 8 | color >> 8;
+            spi_buffers[i][j] = color;
         }
     }
 
@@ -1091,17 +1112,6 @@ rg_display_clear(uint16_t color)
     }
 
     rg_display_drain_spi();
-}
-
-void
-rg_display_show_hourglass()
-{
-    rg_display_write((SCREEN_WIDTH / 2) - (image_hourglass.width / 2),
-        (SCREEN_HEIGHT / 2) - (image_hourglass.height / 2),
-        image_hourglass.width,
-        image_hourglass.height,
-        image_hourglass.width * 2,
-        (uint16_t*)image_hourglass.pixel_data);
 }
 
 void
@@ -1125,19 +1135,19 @@ rg_display_init()
     filterMode = rg_settings_DisplayFilter_get();
     rotationMode = rg_settings_DisplayRotation_get();
 
-    printf("%s: Initialization:\n", __func__);
+    RG_LOGI("Initialization:\n");
 
-    printf("     - calling spi_initialize.\n");
+    RG_LOGI(" - calling spi_initialize.\n");
     spi_initialize();
 
-	printf("     - calling ili9341_init.\n");
+	RG_LOGI(" - calling ili9341_init.\n");
     ili9341_init();
 
-	printf("     - calling backlight_init.\n");
+	RG_LOGI(" - calling backlight_init.\n");
     backlight_init();
 
-	printf("     - starting display_task.\n");
+	RG_LOGI(" - starting display_task.\n");
     xTaskCreatePinnedToCore(&display_task, "display_task", 3072, NULL, 5, NULL, 1);
 
-    printf("     - done.\n");
+    RG_LOGI("init done.\n");
 }

@@ -29,7 +29,7 @@ struct mbc
 
 struct rom
 {
-	byte* bank[512];
+	byte *bank[512];
 	char name[20];
 	int length;
 	int checksum;
@@ -52,7 +52,7 @@ extern struct ram ram;
 void mem_updatemap();
 void mem_write(addr_t a, byte b);
 byte mem_read(addr_t a);
-void mbc_reset();
+void mbc_reset(bool hard);
 
 static inline byte readb(addr_t a)
 {

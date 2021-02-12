@@ -70,6 +70,7 @@ typedef struct {
     uint32_t pixel_mask;    // Used only with palette
     void *buffer;           // Should be at least height*stride bytes
     void *palette;          //
+    void *my_arg;           // Reserved for user usage
     rg_line_diff_t diff[256];
 } rg_video_frame_t;
 
@@ -80,11 +81,11 @@ void rg_display_deinit();
 void rg_display_drain_spi();
 void rg_display_write(int left, int top, int width, int height, int stride, const uint16_t* buffer);
 void rg_display_clear(uint16_t colorLE);
-void rg_display_show_hourglass();
 void rg_display_force_refresh(void);
 void rg_display_set_scale(int width, int height, double aspect_ratio);
 void rg_display_set_callback(update_callback_t func);
-bool rg_display_save_frame(const char *filename, rg_video_frame_t *frame, double scale);
+void rg_display_show_info(const char *text, int timeout_ms);
+bool rg_display_save_frame(const char *filename, const rg_video_frame_t *frame, int width, int height);
 screen_update_t rg_display_queue_update(rg_video_frame_t *frame, rg_video_frame_t *previousFrame);
 
 display_backlight_t rg_display_get_backlight();

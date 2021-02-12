@@ -81,7 +81,7 @@ static void add_emulator(const char *system, const char *dirname, const char* ex
 {
     if (!rg_system_find_app(part))
     {
-        printf("add_emulator: Emulator '%s' (%s) not present, skipping\n", system, part);
+        RG_LOGW("add_emulator: Emulator '%s' (%s) not present, skipping\n", system, part);
         return;
     }
 
@@ -110,7 +110,7 @@ void emulator_init(retro_emulator_t *emu)
 
     emu->initialized = true;
 
-    printf("Retro-Go: Initializing emulator '%s'\n", emu->system_name);
+    RG_LOGX("Retro-Go: Initializing emulator '%s'\n", emu->system_name);
 
     char extensions[64];
     char path[256];
@@ -279,7 +279,7 @@ void emulator_show_file_info(retro_emulator_file_t *file)
         RG_DIALOG_CHOICE_LAST
     };
 
-    sprintf(choices[0].value, "%.127s", file->name);
+    sprintf(choices[0].value, "%.95s", file->name);
     sprintf(choices[1].value, "%s", file->ext);
     sprintf(choices[2].value, "%s", file->folder);
     sprintf(choices[3].value, "%ld KB", rg_filesize(emu_get_file_path(file)) / 1024);
@@ -348,7 +348,7 @@ void emulator_start(retro_emulator_file_t *file, bool load_state)
     if (path == NULL)
         RG_PANIC("Unable to find file...");
 
-    printf("Retro-Go: Starting game: %s\n", path);
+    RG_LOGX("Retro-Go: Starting game: %s\n", path);
 
     rg_settings_StartAction_set(load_state ? EMU_START_ACTION_RESUME : EMU_START_ACTION_NEWGAME);
     rg_settings_RomFilePath_set(path);

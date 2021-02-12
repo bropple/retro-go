@@ -36,12 +36,18 @@ typedef struct dialog_choice_s dialog_choice_t;
 struct dialog_choice_s {
     int  id;
     const char *label;
-    char value[128];
-    int  enabled;
+    char value[96];
+    int  flags;
     bool (*update_cb)(dialog_choice_t *, dialog_event_t);
 };
 
-#define RG_DIALOG_CHOICE_LAST {0x0F0F0F0F, "LAST", "LAST", 0xFFFF, NULL}
+#define RG_DIALOG_FLAG_DISABLED  0 // (1 << 0)
+#define RG_DIALOG_FLAG_NORMAL    1 // (1 << 1)
+#define RG_DIALOG_FLAG_SKIP     -1 // (1 << 2)
+#define RG_DIALOG_FLAG_LAST      0xF0F0
+
+#define RG_DIALOG_CHOICE_LAST {0, NULL, "LAST", RG_DIALOG_FLAG_LAST, NULL}
+#define RG_DIALOG_MAKE_LAST(ptr) {dialog_choice_t *p = (ptr); p->flags = RG_DIALOG_FLAG_LAST;}
 
 typedef struct {
     size_t width;
@@ -204,6 +210,7 @@ int  rg_gui_draw_text(int x, int y, int width, const char *text, uint16_t color,
 void rg_gui_draw_rect(int x, int y, int width, int height, int border, uint16_t color);
 void rg_gui_draw_fill_rect(int x, int y, int width, int height, uint16_t color);
 void rg_gui_draw_battery(int x, int y);
+void rg_gui_draw_hourglass(void);
 void rg_gui_draw_dialog(const char *header, dialog_choice_t *options, int sel);
 
 rg_image_t *rg_gui_load_image_file(const char *file);

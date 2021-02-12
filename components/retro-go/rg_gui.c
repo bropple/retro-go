@@ -7,6 +7,7 @@
 #include <math.h>
 #include <lupng.h>
 
+#include "bitmaps/image_hourglass.h"
 #include "bitmaps/font_basic.h"
 #include "rg_system.h"
 #include "rg_gui.h"
@@ -87,7 +88,7 @@ int rg_gui_draw_text(int x_pos, int y_pos, int width, const char *text, uint16_t
 
         for (int i = 0; i < line_len; i++)
         {
-            const char *glyph = font8x8_basic[(i < chunk_len) ? text[i] : ' '];
+            const char *glyph = font8x8_basic[(i < chunk_len) ? buffer[i] : ' '];
             for (int y = 0; y < glyph_height; y++)
             {
                 int offset = x_offset + (width * y);
@@ -178,7 +179,7 @@ rg_image_t *rg_gui_load_image_file(const char *file)
         return img;
     }
 
-    printf("%s: Unable to load image file '%s'!\n", __func__, file);
+    RG_LOGE("Unable to load image file '%s'!\n", file);
     return NULL;
 }
 
@@ -214,7 +215,7 @@ rg_image_t *rg_gui_load_image(const uint8_t *data, size_t data_len)
 
     if (data_len < (img_width * img_height * 2))
     {
-        printf("%s: Invalid RAW data!\n", __func__);
+        RG_LOGE("Invalid RAW data!\n");
         return false;
     }
 
@@ -263,17 +264,24 @@ void rg_gui_draw_battery(int x_pos, int y_pos)
     rg_gui_draw_fill_rect(x_pos + 1 + width_fill, y_pos + 1, width_empty, 8, color_empty);
 }
 
+void rg_gui_draw_hourglass(void)
+{
+    rg_display_write((RG_SCREEN_WIDTH / 2) - (image_hourglass.width / 2),
+        (RG_SCREEN_HEIGHT / 2) - (image_hourglass.height / 2),
+        image_hourglass.width,
+        image_hourglass.height,
+        image_hourglass.width * 2,
+        (uint16_t*)image_hourglass.pixel_data);
+}
+
 static int get_dialog_items_count(dialog_choice_t *options)
 {
-    dialog_choice_t last = RG_DIALOG_CHOICE_LAST;
-
     if (options == NULL)
         return 0;
 
     for (int i = 0; i < 16; i++)
     {
-        // if (memcmp(&last, options + i, sizeof(last))) {
-        if (options[i].id == last.id && options[i].enabled == last.enabled) {
+        if (options[i].flags == RG_DIALOG_FLAG_LAST) {
             return i;
         }
     }
@@ -341,7 +349,7 @@ void rg_gui_draw_dialog(const char *header, dialog_choice_t *options, int sel)
 
     for (int i = 0; i < options_count; i++)
     {
-        uint16_t color = options[i].enabled == 1 ? theme.item_standard : theme.item_disabled;
+        uint16_t color = (options[i].flags == RG_DIALOG_FLAG_NORMAL) ? theme.item_standard : theme.item_disabled;
         uint16_t fg = (i == sel) ? theme.box_background : color;
         uint16_t bg = (i == sel) ? color : theme.box_background;
         row_height = rg_gui_draw_text(x, y + row_margin, inner_width, rows + i * 256, fg, bg);
@@ -403,7 +411,7 @@ int rg_gui_dialog(const char *header, dialog_choice_t *options, int selected)
                 sel = -1;
                 break;
             }
-            if (options[sel].enabled) {
+            if (options[sel].flags != RG_DIALOG_FLAG_DISABLED) {
                 select = false;
                 if (joystick.values[GAMEPAD_KEY_LEFT]) {
                     last_key = GAMEPAD_KEY_LEFT;
@@ -436,10 +444,15 @@ int rg_gui_dialog(const char *header, dialog_choice_t *options, int selected)
         }
         if (sel_old != sel)
         {
-            int dir = sel - sel_old;
-            while (options[sel].enabled == -1 && sel_old != sel)
+            while (options[sel].flags == RG_DIALOG_FLAG_SKIP && sel_old != sel)
             {
-                sel = (sel + dir) % options_count;
+                sel += (last_key == GAMEPAD_KEY_DOWN) ? 1 : -1;
+
+                if (sel < 0)
+                    sel = options_count - 1;
+
+                if (sel >= options_count)
+                    sel = 0;
             }
             rg_gui_draw_dialog(header, options, sel);
             sel_old = sel;
@@ -583,7 +596,7 @@ int rg_gui_settings_menu(dialog_choice_t *extra_options)
     dialog_choice_t options[12] = {
         {0, "Brightness", "50%",  1, &brightness_update_cb},
         {1, "Volume    ", "50%",  1, &volume_update_cb},
-        {2, "Audio out ", "Spkr", 1, &audio_update_cb},
+        {2, "Audio out ", "Speaker", 1, &audio_update_cb},
         RG_DIALOG_CHOICE_LAST
     };
 
@@ -604,6 +617,7 @@ static void draw_game_status_bar(runtime_stats_t stats)
 {
     int width = RG_SCREEN_WIDTH, height = 16;
     int pad_text = (height - font_info.height) / 2;
+
     char header[41] = "";
     char footer[41] = "";
 
@@ -620,6 +634,20 @@ static void draw_game_status_bar(runtime_stats_t stats)
 
     header[40] = 0;
     footer[40] = 0;
+
+    char header[41] = {0};
+    char footer[41] = {0};
+
+    const rg_app_desc_t *app = rg_system_get_app();
+
+    snprintf(header, 40, "SPEED: %.0f%% (%.0f/%.0f) / BUSY: %.0f%%",
+        round(stats.totalFPS / app->refreshRate * 100.f),
+        round(stats.totalFPS - stats.skippedFPS),
+        round(stats.totalFPS),
+        round(stats.busyPercent));
+
+    if (app->romPath)
+        snprintf(footer, 40, "%s", app->romPath + strlen(RG_BASE_PATH_ROMS));
 
     rg_gui_draw_fill_rect(0, 0, width, height, C_BLACK);
     rg_gui_draw_fill_rect(0, RG_SCREEN_HEIGHT - height, width, height, C_BLACK);
@@ -683,6 +711,7 @@ int rg_gui_game_menu(void)
         {10, "Save & Continue", "",  1, NULL},
         {20, "Save & Quit", "", 1, NULL},
         {30, "Reload", "", 1, NULL},
+        {35, "Reset", "", 1, NULL},
         #ifdef ENABLE_NETPLAY
         {40, "Netplay", "", 1, NULL},
         #endif
@@ -705,6 +734,7 @@ int rg_gui_game_menu(void)
         case 10: rg_emu_save_state(0); break;
         case 20: rg_emu_save_state(0); rg_system_switch_app(RG_APP_LAUNCHER); break;
         case 30: rg_emu_load_state(0); break; // esp_restart();
+        case 35: if (rg_gui_confirm("Reset CPU?", 0, 1)) rg_emu_reset(false); break;
     #ifdef ENABLE_NETPLAY
         case 40: rg_netplay_quick_start(); break;
     #endif

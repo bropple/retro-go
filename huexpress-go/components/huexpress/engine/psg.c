@@ -10,22 +10,24 @@ static const uint8_t vol_tbl[32] = {
     7085 >> 8, 7986 >> 8, 9002 >> 8, 10148 >> 8, 11439 >> 8, 12894 >> 8, 14535 >> 8, 16384 >> 8
 };
 
-static uint32_t noise_rand[PSG_CHANNELS];
-static int32_t noise_level[PSG_CHANNELS];
 // The buffer should be signed but it seems to sound better
 // unsigned. I am still reviewing the implementation bellow.
 // In some games it also sounds better in 8 bit than in 16...
-// static uint8_t mix_buffer[44100 / 60 * 2];
-static int16_t mix_buffer[44100 / 60 * 2];
+// typedef uint8_t sample_t;
+typedef int16_t sample_t;
+
+static uint32_t noise_rand[PSG_CHANNELS];
+static int32_t noise_level[PSG_CHANNELS];
+static sample_t mix_buffer[44100 / 60 * 2];
 
 
-void
-psg_update(short *buf, int ch, size_t dwSize)
+static inline void
+psg_update_chan(sample_t *buf, int ch, size_t dwSize)
 {
     psg_chan_t *chan = &PCE.PSG.chan[ch];
     int sample = 0;
     uint32_t Tp;
-    typeof(buf) buf_end = buf + dwSize;
+    sample_t *buf_end = buf + dwSize;
 
     /*
     * This gives us a volume level of (0...15).
@@ -51,7 +53,7 @@ psg_update(short *buf, int ch, size_t dwSize)
         // const int cycles_per_sample = CYCLES_PER_FRAME / (host.sound.sample_freq / 60);
 
         // float repeat = (float)elapsed / cycles_per_sample / chan->dda_count;
-        // printf("%.2f\n", repeat);
+        // MESSAGE_INFO("%.2f\n", repeat);
 
         int start = (int)chan->dda_index - chan->dda_count;
         if (start < 0)
@@ -164,7 +166,6 @@ psg_update(short *buf, int ch, size_t dwSize)
         }
     }
 
-pad_and_return:
     if (buf < buf_end) {
         memset(buf, 0, (void*)buf_end - (void*)buf);
     }
@@ -191,7 +192,7 @@ psg_term(void)
 
 
 void
-psg_mix(short *buffer, size_t length)
+psg_update(int16_t *output, size_t length)
 {
     int lvol = (PCE.PSG.volume >> 4);
     int rvol = (PCE.PSG.volume & 0x0F);
@@ -200,16 +201,22 @@ psg_mix(short *buffer, size_t length)
         length *= 2;
     }
 
-    memset(buffer, 0, length * 2);
+    memset(output, 0, length * 2);
 
     for (int i = 0; i < PSG_CHANNELS; i++)
     {
-        psg_update((void*)mix_buffer, i, length);
+        psg_update_chan((void*)mix_buffer, i, length);
 
-        for (int j = 0; j < length; j += 2)
-        {
-            buffer[j] += mix_buffer[j] * lvol;
-            buffer[j + 1] += mix_buffer[j + 1] * rvol;
+        if (host.sound.sample_uint8) {
+            for (int j = 0; j < length; j += 2) {
+                output[j] += (uint8_t)mix_buffer[j] * lvol;
+                output[j + 1] += (uint8_t)mix_buffer[j + 1] * rvol;
+            }
+        } else {
+            for (int j = 0; j < length; j += 2) {
+                output[j] += mix_buffer[j] * lvol;
+                output[j + 1] += mix_buffer[j + 1] * rvol;
+            }
         }
     }
 }

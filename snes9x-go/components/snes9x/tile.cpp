@@ -13,7 +13,7 @@
 #ifndef _NEWTILE_CPP
 #define _NEWTILE_CPP
 
-#pragma GCC optimize("Os")
+// #pragma GCC optimize("Os")
 
 #include "snes9x.h"
 #include "ppu.h"
@@ -22,31 +22,68 @@
 static uint32	pixbit[8][16];
 static uint8	hrbit_odd[256];
 static uint8	hrbit_even[256];
+static uint16	BlackColourMap[256];
+static uint16	DirectColourMaps[8][256];
+static uint8	brightness_cap[64];
+static struct SLineMatrixData LineMatrixData[240];
+static uint8 mul_brightness[16][32] =
+{
+	{ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 },
+	{ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
+	  0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02 },
+	{ 0x00, 0x00, 0x00, 0x00, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x02, 0x02, 0x02, 0x02,
+	  0x02, 0x02, 0x02, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x04, 0x04, 0x04, 0x04, 0x04 },
+	{ 0x00, 0x00, 0x00, 0x01, 0x01, 0x01, 0x01, 0x01, 0x02, 0x02, 0x02, 0x02, 0x02, 0x03, 0x03, 0x03,
+	  0x03, 0x03, 0x04, 0x04, 0x04, 0x04, 0x04, 0x05, 0x05, 0x05, 0x05, 0x05, 0x06, 0x06, 0x06, 0x06 },
+	{ 0x00, 0x00, 0x01, 0x01, 0x01, 0x01, 0x02, 0x02, 0x02, 0x02, 0x03, 0x03, 0x03, 0x03, 0x04, 0x04,
+	  0x04, 0x05, 0x05, 0x05, 0x05, 0x06, 0x06, 0x06, 0x06, 0x07, 0x07, 0x07, 0x07, 0x08, 0x08, 0x08 },
+	{ 0x00, 0x00, 0x01, 0x01, 0x01, 0x02, 0x02, 0x02, 0x03, 0x03, 0x03, 0x04, 0x04, 0x04, 0x05, 0x05,
+	  0x05, 0x06, 0x06, 0x06, 0x07, 0x07, 0x07, 0x08, 0x08, 0x08, 0x09, 0x09, 0x09, 0x0a, 0x0a, 0x0a },
+	{ 0x00, 0x00, 0x01, 0x01, 0x02, 0x02, 0x02, 0x03, 0x03, 0x04, 0x04, 0x04, 0x05, 0x05, 0x06, 0x06,
+	  0x06, 0x07, 0x07, 0x08, 0x08, 0x08, 0x09, 0x09, 0x0a, 0x0a, 0x0a, 0x0b, 0x0b, 0x0c, 0x0c, 0x0c },
+	{ 0x00, 0x00, 0x01, 0x01, 0x02, 0x02, 0x03, 0x03, 0x04, 0x04, 0x05, 0x05, 0x06, 0x06, 0x07, 0x07,
+	  0x07, 0x08, 0x08, 0x09, 0x09, 0x0a, 0x0a, 0x0b, 0x0b, 0x0c, 0x0c, 0x0d, 0x0d, 0x0e, 0x0e, 0x0e },
+	{ 0x00, 0x01, 0x01, 0x02, 0x02, 0x03, 0x03, 0x04, 0x04, 0x05, 0x05, 0x06, 0x06, 0x07, 0x07, 0x08,
+	  0x09, 0x09, 0x0a, 0x0a, 0x0b, 0x0b, 0x0c, 0x0c, 0x0d, 0x0d, 0x0e, 0x0e, 0x0f, 0x0f, 0x10, 0x11 },
+	{ 0x00, 0x01, 0x01, 0x02, 0x02, 0x03, 0x04, 0x04, 0x05, 0x05, 0x06, 0x07, 0x07, 0x08, 0x08, 0x09,
+	  0x0a, 0x0a, 0x0b, 0x0b, 0x0c, 0x0d, 0x0d, 0x0e, 0x0e, 0x0f, 0x10, 0x10, 0x11, 0x11, 0x12, 0x13 },
+	{ 0x00, 0x01, 0x01, 0x02, 0x03, 0x03, 0x04, 0x05, 0x05, 0x06, 0x07, 0x07, 0x08, 0x09, 0x09, 0x0a,
+	  0x0b, 0x0b, 0x0c, 0x0d, 0x0d, 0x0e, 0x0f, 0x0f, 0x10, 0x11, 0x11, 0x12, 0x13, 0x13, 0x14, 0x15 },
+	{ 0x00, 0x01, 0x01, 0x02, 0x03, 0x04, 0x04, 0x05, 0x06, 0x07, 0x07, 0x08, 0x09, 0x0a, 0x0a, 0x0b,
+	  0x0c, 0x0c, 0x0d, 0x0e, 0x0f, 0x0f, 0x10, 0x11, 0x12, 0x12, 0x13, 0x14, 0x15, 0x15, 0x16, 0x17 },
+	{ 0x00, 0x01, 0x02, 0x02, 0x03, 0x04, 0x05, 0x06, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0a, 0x0b, 0x0c,
+	  0x0d, 0x0e, 0x0e, 0x0f, 0x10, 0x11, 0x12, 0x12, 0x13, 0x14, 0x15, 0x16, 0x16, 0x17, 0x18, 0x19 },
+	{ 0x00, 0x01, 0x02, 0x03, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0a, 0x0b, 0x0c, 0x0d,
+	  0x0e, 0x0f, 0x10, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x17, 0x18, 0x19, 0x1a, 0x1b },
+	{ 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e,
+	  0x0f, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d },
+	{ 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+	  0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f }
+};
+
 
 void S9xInitTileRenderer (void)
 {
+	memset(BlackColourMap, 0, 256 * sizeof(uint16));
+
+	S9xBuildDirectColourMaps();
+	S9xFixColourBrightness();
+
 	for (int i = 0; i < 16; i++)
 	{
 		uint32	b = 0;
 
 	#ifdef LSB_FIRST
-		if (i & 8)
-			b |= 1;
-		if (i & 4)
-			b |= 1 << 8;
-		if (i & 2)
-			b |= 1 << 16;
-		if (i & 1)
-			b |= 1 << 24;
+		if (i & 8) b |= 1;
+		if (i & 4) b |= 1 << 8;
+		if (i & 2) b |= 1 << 16;
+		if (i & 1) b |= 1 << 24;
 	#else
-		if (i & 8)
-			b |= 1 << 24;
-		if (i & 4)
-			b |= 1 << 16;
-		if (i & 2)
-			b |= 1 << 8;
-		if (i & 1)
-			b |= 1;
+		if (i & 8) b |= 1 << 24;
+		if (i & 4) b |= 1 << 16;
+		if (i & 2) b |= 1 << 8;
+		if (i & 1) b |= 1;
 	#endif
 
 		for (int bitshift = 0; bitshift < 8; bitshift++)
@@ -58,26 +95,122 @@ void S9xInitTileRenderer (void)
 		uint32	m = 0;
 		uint32	s = 0;
 
-		if (i & 0x80)
-			s |= 8;
-		if (i & 0x40)
-			m |= 8;
-		if (i & 0x20)
-			s |= 4;
-		if (i & 0x10)
-			m |= 4;
-		if (i & 0x08)
-			s |= 2;
-		if (i & 0x04)
-			m |= 2;
-		if (i & 0x02)
-			s |= 1;
-		if (i & 0x01)
-			m |= 1;
+		if (i & 0x80) s |= 8;
+		if (i & 0x40) m |= 8;
+		if (i & 0x20) s |= 4;
+		if (i & 0x10) m |= 4;
+		if (i & 0x08) s |= 2;
+		if (i & 0x04) m |= 2;
+		if (i & 0x02) s |= 1;
+		if (i & 0x01) m |= 1;
 
 		hrbit_odd[i]  = m;
 		hrbit_even[i] = s;
 	}
+}
+
+void S9xBuildDirectColourMaps (void)
+{
+	IPPU.XB = (uint8 *)mul_brightness[PPU.Brightness];
+
+	for (int p = 0; p < 8; p++)
+	{
+		for (int c = 0; c < 256; c++)
+		{
+			uint8 r = IPPU.XB[((c & 7) << 2) | ((p & 1) << 1)];
+			uint8 g = IPPU.XB[((c & 0x38) >> 1) | (p & 2)];
+			uint8 b = IPPU.XB[((c & 0xc0) >> 3) | (p & 4)];
+			DirectColourMaps[p][c] = BUILD_PIXEL(r, g, b);
+		}
+	}
+}
+
+void S9xFixColourBrightness (void)
+{
+	IPPU.XB = (uint8 *)mul_brightness[PPU.Brightness];
+
+	for (int i = 0; i < 64; i++)
+	{
+		if (i > IPPU.XB[0x1f])
+			brightness_cap[i] = IPPU.XB[0x1f];
+		else
+			brightness_cap[i] = i;
+	}
+
+	for (int i = 0; i < 256; i++)
+	{
+		uint8 r = IPPU.XB[(PPU.CGDATA[i])       & 0x1f];
+		uint8 g = IPPU.XB[(PPU.CGDATA[i] >>  5) & 0x1f];
+		uint8 b = IPPU.XB[(PPU.CGDATA[i] >> 10) & 0x1f];
+		IPPU.ScreenColors[i] = BUILD_PIXEL(r, g, b);
+	}
+}
+
+void S9UpdateLineMatrix(int line)
+{
+	struct SLineMatrixData *p = &LineMatrixData[line];
+	p->MatrixA = PPU.MatrixA;
+	p->MatrixB = PPU.MatrixB;
+	p->MatrixC = PPU.MatrixC;
+	p->MatrixD = PPU.MatrixD;
+	p->CentreX = PPU.CentreX;
+	p->CentreY = PPU.CentreY;
+	p->M7HOFS  = PPU.M7HOFS;
+	p->M7VOFS  = PPU.M7VOFS;
+}
+
+#define COLOR_ADD1_2(C1, C2) \
+	((((((C1) & RGB_REMOVE_LOW_BITS_MASK) + \
+	((C2) & RGB_REMOVE_LOW_BITS_MASK)) >> 1) + \
+	((C1) & (C2) & RGB_LOW_BITS_MASK)) | ALPHA_BITS_MASK)
+#define COLOR_ADD_BRIGHTNESS1_2 COLOR_ADD1_2
+
+static inline uint16 COLOR_ADD_BRIGHTNESS(uint32 C1, uint32 C2)
+{
+    return ((brightness_cap[ (C1 >> RED_SHIFT_BITS)           +  (C2 >> RED_SHIFT_BITS)          ] << RED_SHIFT_BITS)   |
+            (brightness_cap[((C1 >> GREEN_SHIFT_BITS) & 0x1f) + ((C2 >> GREEN_SHIFT_BITS) & 0x1f)] << GREEN_SHIFT_BITS) |
+// Proper 15->16bit color conversion moves the high bit of green into the low bit.
+#if GREEN_SHIFT_BITS == 6
+           ((brightness_cap[((C1 >> 6) & 0x1f) + ((C2 >> 6) & 0x1f)] & 0x10) << 1) |
+#endif
+            (brightness_cap[ (C1                      & 0x1f) +  (C2                      & 0x1f)]      ));
+}
+
+static inline uint16 COLOR_ADD(uint32 C1, uint32 C2)
+{
+	const uint32 RED_MASK   = 0x1F << RED_SHIFT_BITS;
+	const uint32 GREEN_MASK = 0x1F << GREEN_SHIFT_BITS;
+	const uint32 BLUE_MASK  = 0x1F;
+
+	int rb = C1 & (RED_MASK | BLUE_MASK);
+	rb += C2 & (RED_MASK | BLUE_MASK);
+	int rbcarry = rb & ((0x20 << RED_SHIFT_BITS) | (0x20 << 0));
+	int g = (C1 & (GREEN_MASK)) + (C2 & (GREEN_MASK));
+	int rgbsaturate = (((g & (0x20 << GREEN_SHIFT_BITS)) | rbcarry) >> 5) * 0x1f;
+	uint16 retval = (rb & (RED_MASK | BLUE_MASK)) | (g & GREEN_MASK) | rgbsaturate;
+#if GREEN_SHIFT_BITS == 6
+	retval |= (retval & 0x0400) >> 5;
+#endif
+	return retval;
+}
+
+#define COLOR_SUB1_2(C1, C2) \
+	GFX.ZERO[(((C1) | RGB_HI_BITS_MASKx2) - \
+	((C2) & RGB_REMOVE_LOW_BITS_MASK)) >> 1]
+
+static inline uint16 COLOR_SUB (uint32 C1, uint32 C2)
+{
+	int rb1 = (C1 & (THIRD_COLOR_MASK | FIRST_COLOR_MASK)) | ((0x20 << 0) | (0x20 << RED_SHIFT_BITS));
+	int rb2 = C2 & (THIRD_COLOR_MASK | FIRST_COLOR_MASK);
+	int rb = rb1 - rb2;
+	int rbcarry = rb & ((0x20 << RED_SHIFT_BITS) | (0x20 << 0));
+	int g = ((C1 & (SECOND_COLOR_MASK)) | (0x20 << GREEN_SHIFT_BITS)) - (C2 & (SECOND_COLOR_MASK));
+	int rgbsaturate = (((g & (0x20 << GREEN_SHIFT_BITS)) | rbcarry) >> 5) * 0x1f;
+	uint16 retval = ((rb & (THIRD_COLOR_MASK | FIRST_COLOR_MASK)) | (g & SECOND_COLOR_MASK)) & rgbsaturate;
+#if GREEN_SHIFT_BITS == 6
+	retval |= (retval & 0x0400) >> 5;
+#endif
+	return retval;
 }
 
 // Here are the tile converters, selected by S9xSelectTileConverter().
@@ -312,65 +445,12 @@ void S9xSelectTileRenderers (int BGMode, bool8 sub, bool8 obj)
 	M7M1 = PPU.BGMosaic[0] && PPU.Mosaic > 1;
 	M7M2 = PPU.BGMosaic[1] && PPU.Mosaic > 1;
 
-	bool8 interlace = obj ? FALSE : IPPU.Interlace;
-	bool8 hires = !sub && (BGMode == 5 || BGMode == 6 || IPPU.PseudoHires);
-
-	if (!IPPU.DoubleWidthPixels)	// normal width
-	{
-		DT     = Renderers_DrawTile16Normal1x1;
-		DCT    = Renderers_DrawClippedTile16Normal1x1;
-		DMP    = Renderers_DrawMosaicPixel16Normal1x1;
-		DB     = Renderers_DrawBackdrop16Normal1x1;
-		DM7BG1 = M7M1 ? Renderers_DrawMode7MosaicBG1Normal1x1 : Renderers_DrawMode7BG1Normal1x1;
-		DM7BG2 = M7M2 ? Renderers_DrawMode7MosaicBG2Normal1x1 : Renderers_DrawMode7BG2Normal1x1;
-		GFX.LinesPerTile = 8;
-	}
-	else if(hires)					// hires double width
-	{
-		if (interlace)
-		{
-			DT     = Renderers_DrawTile16HiresInterlace;
-			DCT    = Renderers_DrawClippedTile16HiresInterlace;
-			DMP    = Renderers_DrawMosaicPixel16HiresInterlace;
-			DB     = Renderers_DrawBackdrop16Hires;
-			DM7BG1 = M7M1 ? Renderers_DrawMode7MosaicBG1Hires : Renderers_DrawMode7BG1Hires;
-			DM7BG2 = M7M2 ? Renderers_DrawMode7MosaicBG2Hires : Renderers_DrawMode7BG2Hires;
-			GFX.LinesPerTile = 4;
-		}
-		else
-		{
-			DT     = Renderers_DrawTile16Hires;
-			DCT    = Renderers_DrawClippedTile16Hires;
-			DMP    = Renderers_DrawMosaicPixel16Hires;
-			DB     = Renderers_DrawBackdrop16Hires;
-			DM7BG1 = M7M1 ? Renderers_DrawMode7MosaicBG1Hires : Renderers_DrawMode7BG1Hires;
-			DM7BG2 = M7M2 ? Renderers_DrawMode7MosaicBG2Hires : Renderers_DrawMode7BG2Hires;
-			GFX.LinesPerTile = 8;
-		}
-	}
-	else							// normal double width
-	{
-		if (interlace)
-		{
-			DT     = Renderers_DrawTile16Interlace;
-			DCT    = Renderers_DrawClippedTile16Interlace;
-			DMP    = Renderers_DrawMosaicPixel16Interlace;
-			DB     = Renderers_DrawBackdrop16Normal2x1;
-			DM7BG1 = M7M1 ? Renderers_DrawMode7MosaicBG1Normal2x1 : Renderers_DrawMode7BG1Normal2x1;
-			DM7BG2 = M7M2 ? Renderers_DrawMode7MosaicBG2Normal2x1 : Renderers_DrawMode7BG2Normal2x1;
-			GFX.LinesPerTile = 4;
-		}
-		else
-		{
-			DT     = Renderers_DrawTile16Normal2x1;
-			DCT    = Renderers_DrawClippedTile16Normal2x1;
-			DMP    = Renderers_DrawMosaicPixel16Normal2x1;
-			DB     = Renderers_DrawBackdrop16Normal2x1;
-			DM7BG1 = M7M1 ? Renderers_DrawMode7MosaicBG1Normal2x1 : Renderers_DrawMode7BG1Normal2x1;
-			DM7BG2 = M7M2 ? Renderers_DrawMode7MosaicBG2Normal2x1 : Renderers_DrawMode7BG2Normal2x1;
-			GFX.LinesPerTile = 8;
-		}
-	}
+	DT     = Renderers_DrawTile16Normal1x1;
+	DCT    = Renderers_DrawClippedTile16Normal1x1;
+	DMP    = Renderers_DrawMosaicPixel16Normal1x1;
+	DB     = Renderers_DrawBackdrop16Normal1x1;
+	DM7BG1 = M7M1 ? Renderers_DrawMode7MosaicBG1Normal1x1 : Renderers_DrawMode7BG1Normal1x1;
+	DM7BG2 = M7M2 ? Renderers_DrawMode7MosaicBG2Normal1x1 : Renderers_DrawMode7BG2Normal1x1;
 
 	GFX.DrawTileNomath        = DT[0];
 	GFX.DrawClippedTileNomath = DCT[0];
@@ -379,11 +459,9 @@ void S9xSelectTileRenderers (int BGMode, bool8 sub, bool8 obj)
 	GFX.DrawMode7BG1Nomath    = DM7BG1[0];
 	GFX.DrawMode7BG2Nomath    = DM7BG2[0];
 
-	int	i;
+	int	i = 0;
 
-	if (!Settings.Transparency)
-		i = 0;
-	else
+	if (Settings.Transparency)
 	{
 		i = (Memory.FillRAM[0x2131] & 0x80) ? 4 : 1;
 		if (Memory.FillRAM[0x2131] & 0x40)
@@ -399,7 +477,6 @@ void S9xSelectTileRenderers (int BGMode, bool8 sub, bool8 obj)
 			else if (i == 3)
 				i = 8;
 		}
-
 	}
 
 	GFX.DrawTileMath        = DT[i];
@@ -546,9 +623,6 @@ void S9xSelectTileConverter (int depth, bool8 hires, bool8 sub, bool8 mosaic)
 
 // Basic routine to render an unclipped tile.
 // Input parameters:
-//     BPSTART = either StartLine or (StartLine * 2 + BG.InterlaceLine),
-//     so interlace modes can render every other line from the tile.
-//     PITCH = 1 or 2, again so interlace can count lines properly.
 //     DRAW_PIXEL(N, M) is a routine to actually draw the pixel. N is the pixel in the row to draw,
 //     and M is a test which if false means the pixel should be skipped.
 //     Z1 is the "draw if Z1 > cur_depth".
@@ -570,9 +644,9 @@ void S9xSelectTileConverter (int depth, bool8 hires, bool8 sub, bool8 mosaic)
 	\
 	if (!(Tile & (V_FLIP | H_FLIP))) \
 	{ \
-		bp = pCache + BPSTART; \
+		bp = pCache + StartLine; \
 		OFFSET_IN_LINE; \
-		for (l = LineCount; l > 0; l--, bp += 8 * PITCH, Offset += GFX.PPL) \
+		for (l = LineCount; l > 0; l--, bp += 8, Offset += GFX.PPL) \
 		{ \
 			for (int x = 0; x < 8; x++) { \
 				DRAW_PIXEL(x, Pix = bp[x]); \
@@ -582,9 +656,9 @@ void S9xSelectTileConverter (int depth, bool8 hires, bool8 sub, bool8 mosaic)
 	else \
 	if (!(Tile & V_FLIP)) \
 	{ \
-		bp = pCache + BPSTART; \
+		bp = pCache + StartLine; \
 		OFFSET_IN_LINE; \
-		for (l = LineCount; l > 0; l--, bp += 8 * PITCH, Offset += GFX.PPL) \
+		for (l = LineCount; l > 0; l--, bp += 8, Offset += GFX.PPL) \
 		{ \
 			for (int x = 0; x < 8; x++) { \
 				DRAW_PIXEL(x, Pix = bp[7 - x]); \
@@ -594,9 +668,9 @@ void S9xSelectTileConverter (int depth, bool8 hires, bool8 sub, bool8 mosaic)
 	else \
 	if (!(Tile & H_FLIP)) \
 	{ \
-		bp = pCache + 56 - BPSTART; \
+		bp = pCache + 56 - StartLine; \
 		OFFSET_IN_LINE; \
-		for (l = LineCount; l > 0; l--, bp -= 8 * PITCH, Offset += GFX.PPL) \
+		for (l = LineCount; l > 0; l--, bp -= 8, Offset += GFX.PPL) \
 		{ \
 			for (int x = 0; x < 8; x++) { \
 				DRAW_PIXEL(x, Pix = bp[x]); \
@@ -605,9 +679,9 @@ void S9xSelectTileConverter (int depth, bool8 hires, bool8 sub, bool8 mosaic)
 	} \
 	else \
 	{ \
-		bp = pCache + 56 - BPSTART; \
+		bp = pCache + 56 - StartLine; \
 		OFFSET_IN_LINE; \
-		for (l = LineCount; l > 0; l--, bp -= 8 * PITCH, Offset += GFX.PPL) \
+		for (l = LineCount; l > 0; l--, bp -= 8, Offset += GFX.PPL) \
 		{ \
 			for (int x = 0; x < 8; x++) { \
 				DRAW_PIXEL(x, Pix = bp[7 - x]); \
@@ -645,9 +719,9 @@ void S9xSelectTileConverter (int depth, bool8 hires, bool8 sub, bool8 mosaic)
 	\
 	if (!(Tile & (V_FLIP | H_FLIP))) \
 	{ \
-		bp = pCache + BPSTART; \
+		bp = pCache + StartLine; \
 		OFFSET_IN_LINE; \
-		for (l = LineCount; l > 0; l--, bp += 8 * PITCH, Offset += GFX.PPL) \
+		for (l = LineCount; l > 0; l--, bp += 8 , Offset += GFX.PPL) \
 		{ \
 			w = Width; \
 			switch (StartPixel) \
@@ -666,9 +740,9 @@ void S9xSelectTileConverter (int depth, bool8 hires, bool8 sub, bool8 mosaic)
 	else \
 	if (!(Tile & V_FLIP)) \
 	{ \
-		bp = pCache + BPSTART; \
+		bp = pCache + StartLine; \
 		OFFSET_IN_LINE; \
-		for (l = LineCount; l > 0; l--, bp += 8 * PITCH, Offset += GFX.PPL) \
+		for (l = LineCount; l > 0; l--, bp += 8, Offset += GFX.PPL) \
 		{ \
 			w = Width; \
 			switch (StartPixel) \
@@ -687,9 +761,9 @@ void S9xSelectTileConverter (int depth, bool8 hires, bool8 sub, bool8 mosaic)
 	else \
 	if (!(Tile & H_FLIP)) \
 	{ \
-		bp = pCache + 56 - BPSTART; \
+		bp = pCache + 56 - StartLine; \
 		OFFSET_IN_LINE; \
-		for (l = LineCount; l > 0; l--, bp -= 8 * PITCH, Offset += GFX.PPL) \
+		for (l = LineCount; l > 0; l--, bp -= 8, Offset += GFX.PPL) \
 		{ \
 			w = Width; \
 			switch (StartPixel) \
@@ -707,9 +781,9 @@ void S9xSelectTileConverter (int depth, bool8 hires, bool8 sub, bool8 mosaic)
 	} \
 	else \
 	{ \
-		bp = pCache + 56 - BPSTART; \
+		bp = pCache + 56 - StartLine; \
 		OFFSET_IN_LINE; \
-		for (l = LineCount; l > 0; l--, bp -= 8 * PITCH, Offset += GFX.PPL) \
+		for (l = LineCount; l > 0; l--, bp -= 8, Offset += GFX.PPL) \
 		{ \
 			w = Width; \
 			switch (StartPixel) \
@@ -740,7 +814,7 @@ void S9xSelectTileConverter (int depth, bool8 hires, bool8 sub, bool8 mosaic)
 #undef Z2
 
 // Basic routine to render a single mosaic pixel.
-// DRAW_PIXEL, BPSTART, Z1, Z2 and Pix are the same as above, but PITCH is not used.
+// DRAW_PIXEL, Z1, Z2 and Pix are the same as above
 
 #define Z1	GFX.Z1
 #define Z2	GFX.Z2
@@ -759,9 +833,9 @@ void S9xSelectTileConverter (int depth, bool8 hires, bool8 sub, bool8 mosaic)
 		StartPixel = 7 - StartPixel; \
 	\
 	if (Tile & V_FLIP) \
-		Pix = pCache[56 - BPSTART + StartPixel]; \
+		Pix = pCache[56 - StartLine + StartPixel]; \
 	else \
-		Pix = pCache[BPSTART + StartPixel]; \
+		Pix = pCache[StartLine + StartPixel]; \
 	\
 	if (Pix) \
 	{ \
@@ -787,11 +861,10 @@ void S9xSelectTileConverter (int depth, bool8 hires, bool8 sub, bool8 mosaic)
 #undef Z2
 
 // Basic routine to render the backdrop.
-// DRAW_PIXEL is the same as above, but since we're just replicating a single pixel there's no need for PITCH or BPSTART
+// DRAW_PIXEL is the same as above
 // (or interlace at all, really).
 // The backdrop is always depth = 1, so Z1 = Z2 = 1. And backdrop is always color 0.
 
-#define NO_INTERLACE	1
 #define Z1				1
 #define Z2				1
 #define Pix				0
@@ -822,10 +895,8 @@ void S9xSelectTileConverter (int depth, bool8 hires, bool8 sub, bool8 mosaic)
 #undef Pix
 #undef Z1
 #undef Z2
-#undef NO_INTERLACE
 
 // Basic routine to render a chunk of a Mode 7 BG.
-// Mode 7 has no interlace, so BPSTART and PITCH are unused.
 // We get some new parameters, so we can use the same DRAW_TILE to do BG1 or BG2:
 //     DCMODE tests if Direct Color should apply.
 //     BG is the BG, so we use the right clip window.
@@ -834,9 +905,6 @@ void S9xSelectTileConverter (int depth, bool8 hires, bool8 sub, bool8 mosaic)
 
 #define CLIP_10_BIT_SIGNED(a)	(((a) & 0x2000) ? ((a) | ~0x3ff) : ((a) & 0x3ff))
 
-extern struct SLineMatrixData	LineMatrixData[240];
-
-#define NO_INTERLACE	1
 #define Z1				(D + 7)
 #define Z2				(D + 7)
 #define MASK			0xff
@@ -1021,7 +1089,7 @@ extern struct SLineMatrixData	LineMatrixData[240];
 		\
 		if (!PPU.Mode7Repeat) \
 		{ \
-			for (int32 x = MLeft; x < MRight; x++, AA += aa, CC += cc) \
+			for (int x = MLeft; x < MRight; x++, AA += aa, CC += cc) \
 			{ \
 				if (--ctr) \
 					continue; \
@@ -1035,9 +1103,9 @@ extern struct SLineMatrixData	LineMatrixData[240];
 				\
 				if ((Pix = (b & MASK))) \
 				{ \
-					for (int32 h = MosaicStart; h < VMosaic; h++) \
+					for (int h = MosaicStart; h < VMosaic; h++) \
 					{ \
-						for (int32 w = x + HMosaic - 1; w >= x; w--) \
+						for (int w = x + HMosaic - 1; w >= x; w--) \
 							DRAW_PIXEL(w + h * GFX.PPL, (w >= (int32) Left && w < (int32) Right)); \
 					} \
 				} \
@@ -1045,7 +1113,7 @@ extern struct SLineMatrixData	LineMatrixData[240];
 		} \
 		else \
 		{ \
-			for (int32 x = MLeft; x < MRight; x++, AA += aa, CC += cc) \
+			for (int x = MLeft; x < MRight; x++, AA += aa, CC += cc) \
 			{ \
 				if (--ctr) \
 					continue; \
@@ -1069,9 +1137,9 @@ extern struct SLineMatrixData	LineMatrixData[240];
 				\
 				if ((Pix = (b & MASK))) \
 				{ \
-					for (int32 h = MosaicStart; h < VMosaic; h++) \
+					for (int h = MosaicStart; h < VMosaic; h++) \
 					{ \
-						for (int32 w = x + HMosaic - 1; w >= x; w--) \
+						for (int w = x + HMosaic - 1; w >= x; w--) \
 							DRAW_PIXEL(w + h * GFX.PPL, (w >= (int32) Left && w < (int32) Right)); \
 					} \
 				} \
@@ -1139,21 +1207,11 @@ extern struct SLineMatrixData	LineMatrixData[240];
 #undef DRAW_TILE_MOSAIC
 #undef Z1
 #undef Z2
-#undef NO_INTERLACE
 
 /*****************************************************************************/
 #else
 #ifndef NAME2 // Second-level: Get all the NAME1 renderers.
 /*****************************************************************************/
-
-#define BPSTART	StartLine
-#define PITCH	1
-
-// #define CALC_PIXEL(x...) ({\
-// 	int __p = MATH(x); \
-// 	(__p >> 8) | (__p << 8); \
-// })
-#define CALC_PIXEL MATH
 
 // The 1x1 pixel plotter, for speedhacking modes.
 
@@ -1161,7 +1219,7 @@ extern struct SLineMatrixData	LineMatrixData[240];
 #define DRAW_PIXEL(N, M) \
 	if (Z1 > GFX.DB[Offset + N] && (M)) \
 	{ \
-		GFX.S[Offset + N] = CALC_PIXEL(GFX.ScreenColors[Pix], GFX.SubScreen[Offset + N], GFX.SubZBuffer[Offset + N]); \
+		GFX.S[Offset + N] = MATH(GFX.ScreenColors[Pix], GFX.SubScreen[Offset + N], GFX.SubZBuffer[Offset + N]); \
 		GFX.DB[Offset + N] = Z2; \
 	}
 
@@ -1173,100 +1231,6 @@ extern struct SLineMatrixData	LineMatrixData[240];
 
 #undef NAME2
 #undef DRAW_PIXEL
-
-// The 2x1 pixel plotter, for normal rendering when we've used hires/interlace already this frame.
-
-#define DRAW_PIXEL_N2x1(N, M) \
-	if (Z1 > GFX.DB[Offset + 2 * N] && (M)) \
-	{ \
-		GFX.S[Offset + 2 * N] = GFX.S[Offset + 2 * N + 1] = CALC_PIXEL(GFX.ScreenColors[Pix], GFX.SubScreen[Offset + 2 * N], GFX.SubZBuffer[Offset + 2 * N]); \
-		GFX.DB[Offset + 2 * N] = GFX.DB[Offset + 2 * N + 1] = Z2; \
-	}
-
-#define DRAW_PIXEL(N, M)	DRAW_PIXEL_N2x1(N, M)
-#define NAME2				Normal2x1
-
-// Third-level include: Get the Normal2x1 renderers.
-
-#include "tile.cpp"
-
-#undef NAME2
-#undef DRAW_PIXEL
-#undef OFFSET_IN_LINE
-
-// Hires pixel plotter, this combines the main and subscreen pixels as appropriate to render hires or pseudo-hires images.
-// Use it only on the main screen, subscreen should use Normal2x1 instead.
-// Hires math:
-//     Main pixel is mathed as normal: Main(x, y) * Sub(x, y).
-//     Sub pixel is mathed somewhat weird: Basically, for Sub(x + 1, y) we apply the same operation we applied to Main(x, y)
-//     (e.g. no math, add fixed, add1/2 subscreen) using Main(x, y) as the "corresponding subscreen pixel".
-//     Also, color window clipping clips Sub(x + 1, y) if Main(x, y) is clipped, not Main(x + 1, y).
-//     We don't know how Sub(0, y) is handled.
-
-#define DRAW_PIXEL_H2x1(N, M) \
-	if (Z1 > GFX.DB[Offset + 2 * N] && (M)) \
-	{ \
-		GFX.S[Offset + 2 * N + 1] = CALC_PIXEL(GFX.ScreenColors[Pix], GFX.SubScreen[Offset + 2 * N], GFX.SubZBuffer[Offset + 2 * N]); \
-		if ((OffsetInLine + 2 * N ) != (SNES_WIDTH - 1) << 1) \
-			GFX.S[Offset + 2 * N + 2] = CALC_PIXEL((GFX.ClipColors ? 0 : GFX.SubScreen[Offset + 2 * N + 2]), GFX.RealScreenColors[Pix], GFX.SubZBuffer[Offset + 2 * N]); \
-		if ((OffsetInLine + 2 * N) == 0 || (OffsetInLine + 2 * N) == GFX.RealPPL) \
-			GFX.S[Offset + 2 * N] = CALC_PIXEL((GFX.ClipColors ? 0 : GFX.SubScreen[Offset + 2 * N]), GFX.RealScreenColors[Pix], GFX.SubZBuffer[Offset + 2 * N]); \
-		GFX.DB[Offset + 2 * N] = GFX.DB[Offset + 2 * N + 1] = Z2; \
-	}
-
-#define OFFSET_IN_LINE \
-	uint32 OffsetInLine = Offset % GFX.RealPPL;
-#define DRAW_PIXEL(N, M)	DRAW_PIXEL_H2x1(N, M)
-#define NAME2				Hires
-
-// Third-level include: Get the Hires renderers.
-
-#include "tile.cpp"
-
-#undef NAME2
-#undef DRAW_PIXEL
-#undef OFFSET_IN_LINE
-
-// Interlace: Only draw every other line, so we'll redefine BPSTART and PITCH to do so.
-// Otherwise, it's the same as Normal2x1/Hires2x1.
-
-#undef BPSTART
-#undef PITCH
-
-#define BPSTART	(StartLine * 2 + BG.InterlaceLine)
-#define PITCH	2
-
-#ifndef NO_INTERLACE
-
-#define OFFSET_IN_LINE
-#define DRAW_PIXEL(N, M)	DRAW_PIXEL_N2x1(N, M)
-#define NAME2				Interlace
-
-// Third-level include: Get the double width Interlace renderers.
-
-#include "tile.cpp"
-
-#undef NAME2
-#undef DRAW_PIXEL
-#undef OFFSET_IN_LINE
-
-#define OFFSET_IN_LINE \
-	uint32 OffsetInLine = Offset % GFX.RealPPL;
-#define DRAW_PIXEL(N, M)	DRAW_PIXEL_H2x1(N, M)
-#define NAME2				HiresInterlace
-
-// Third-level include: Get the HiresInterlace renderers.
-
-#include "tile.cpp"
-
-#undef NAME2
-#undef DRAW_PIXEL
-#undef OFFSET_IN_LINE
-
-#endif
-
-#undef BPSTART
-#undef PITCH
 
 /*****************************************************************************/
 #else // Third-level: Renderers for each math mode for NAME1 + NAME2.

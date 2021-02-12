@@ -11,7 +11,7 @@
 #include <ctype.h>
 
 #include "snes9x.h"
-#include "memmap.h"
+#include "memory.h"
 #include "apu/apu.h"
 #include "snapshot.h"
 #include "controls.h"
@@ -33,10 +33,6 @@ using namespace	std;
 #define MAP_UNKNOWN				(-1)
 #define MAP_NONE				0
 #define MAP_BUTTON				1
-
-#define FLAG_IOBIT0				(Memory.FillRAM[0x4213] & 0x40)
-#define FLAG_IOBIT1				(Memory.FillRAM[0x4213] & 0x80)
-#define FLAG_IOBIT(n)			((n) ? (FLAG_IOBIT1) : (FLAG_IOBIT0))
 
 static uint8	read_idx[2 /* ports */][2 /* per port */];
 static struct
@@ -75,7 +71,6 @@ static char							buf[256];
 	S(QuickSave000), \
 	S(Reset), \
 	S(SaveFreezeFile), \
-	S(SaveSPC), \
 	S(SeekToFrame), \
 	S(SoftReset), \
 	S(SoundChannel0), \
@@ -595,10 +590,6 @@ void S9xApplyCommand (s9xcommand_t cmd, int16 data1, int16 data2)
 						DisplayStateChange("Pause", Settings.Paused);
 						break;
 
-					case SaveSPC:
-						S9xDumpSPCSnapshot();
-						break;
-
 					case SoundChannel0:
 					case SoundChannel1:
 					case SoundChannel2:
@@ -821,9 +812,6 @@ void S9xDoAutoJoypad (void)
 
 void S9xControlEOF (void)
 {
-	PPU.GunVLatch = 1000; // i.e., never latch
-	PPU.GunHLatch = 0;
-
 	for (int n = 0; n < 2; n++)
 	{
 		int i = curcontrollers[n];
