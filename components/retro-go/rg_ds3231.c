@@ -130,8 +130,7 @@ uint16_t dayOfYear(uint16_t y, uint8_t m, uint8_t d) {
     
   //return number day in the year it is, needed for GB RTC
   //enter the year, month, and day of month to get the overall day of year.
-    
-  uint8_t daysInMonth[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+  uint8_t daysInMonth[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
   uint16_t doy = d;
   
   if( (y % 4 == 0 && y % 100 != 0 ) || (y % 4 == 0) )

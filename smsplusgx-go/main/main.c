@@ -183,9 +183,6 @@ void app_main(void)
 
     long frameTime = get_frame_time(app->refreshRate);
     long skipFrames = 0;
-
-    long frameTime = get_frame_time(refreshRate);
-    bool fullFrame = false;
     
     while (true)
     {

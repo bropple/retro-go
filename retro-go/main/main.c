@@ -22,6 +22,8 @@
 
 #define USE_CONFIG_FILE
 
+struct tm RTCtimeBuf = { 0 }; //time buffer for use in RTC settings
+
 static bool font_size_cb(dialog_choice_t *option, dialog_event_t event)
 {
     int font_size = rg_gui_get_font_info().points;
@@ -105,11 +107,13 @@ static bool color_shift_cb(dialog_choice_t *option, dialog_event_t event)
 
 static bool rtc_enable_cb(dialog_choice_t *option, dialog_event_t event)
 {
-if (event == RG_DIALOG_PREV || event == RG_DIALOG_NEXT) {
+    if (event == RG_DIALOG_PREV || event == RG_DIALOG_NEXT) {
         gui.rtc_enable = gui.rtc_enable ? 0 : 1;
         rg_settings_int32_set(KEY_RTC_ENABLE, gui.rtc_enable);
+        
     }
     strcpy(option->value, gui.rtc_enable ? "On" : "Off");
+    
     return event == RG_DIALOG_ENTER;
 }
 
@@ -148,21 +152,105 @@ static bool rtc_hour_pref_cb(dialog_choice_t *option, dialog_event_t event)
     return event == RG_DIALOG_ENTER;
 }
 
-static bool rtc_state_cb(dialog_choice_t *option, dialog_event_t event)
+static bool rtc_t_set_cb(dialog_choice_t *option, dialog_event_t event)
 {
+    if(option->id == 'Y') {
+        //2000 min, 2090 max
+        if (event == RG_DIALOG_PREV && --RTCtimeBuf.tm_year < 2000) RTCtimeBuf.tm_year = 2090;
+        if (event == RG_DIALOG_NEXT && ++RTCtimeBuf.tm_year > 2090) RTCtimeBuf.tm_year = 2000;
+        sprintf(option->value, "%04d", RTCtimeBuf.tm_year);
+    }
+    if(option->id == 'M') {
+        if (event == RG_DIALOG_PREV && --RTCtimeBuf.tm_mon < 0) RTCtimeBuf.tm_mon = 11;
+        if (event == RG_DIALOG_NEXT && ++RTCtimeBuf.tm_mon > 11) RTCtimeBuf.tm_mon = 0;
+        char * values[12] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+        strcpy(option->value, values[RTCtimeBuf.tm_mon]);
+    }
+    if(option->id == 'd') {
+        uint8_t daysInMonth[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+        uint8_t max_day = daysInMonth[RTCtimeBuf.tm_mon];
+        if (event == RG_DIALOG_PREV && --RTCtimeBuf.tm_mday < 1) RTCtimeBuf.tm_mday = max_day;
+        if (event == RG_DIALOG_NEXT && ++RTCtimeBuf.tm_mday > max_day) RTCtimeBuf.tm_mday = 1;
+        sprintf(option->value, "%02d", RTCtimeBuf.tm_mday);
+    }
+    if (option->id == 'D') {
+        if (event == RG_DIALOG_PREV && --RTCtimeBuf.tm_wday < 0) RTCtimeBuf.tm_wday = 6;
+        if (event == RG_DIALOG_NEXT && ++RTCtimeBuf.tm_wday > 6) RTCtimeBuf.tm_wday = 0;
+        const char *values[7] = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"};
+        strcpy(option->value, values[RTCtimeBuf.tm_wday]);
+    }
+    if (option->id == 'h') {
+        if (event == RG_DIALOG_PREV && --RTCtimeBuf.tm_hour < 0) RTCtimeBuf.tm_hour = 23;
+        if (event == RG_DIALOG_NEXT && ++RTCtimeBuf.tm_hour > 23) RTCtimeBuf.tm_hour = 0;
+        sprintf(option->value, "%02d", RTCtimeBuf.tm_hour);
+    }
+    if (option->id == 'm') {
+        if (event == RG_DIALOG_PREV && --RTCtimeBuf.tm_min < 0) RTCtimeBuf.tm_min = 59;
+        if (event == RG_DIALOG_NEXT && ++RTCtimeBuf.tm_min > 59) RTCtimeBuf.tm_min = 0;
+        sprintf(option->value, "%02d", RTCtimeBuf.tm_min);
+    }
+    if (option->id == 's') {
+        if (event == RG_DIALOG_PREV && --RTCtimeBuf.tm_sec < 0) RTCtimeBuf.tm_sec = 59;
+        if (event == RG_DIALOG_NEXT && ++RTCtimeBuf.tm_sec > 59) RTCtimeBuf.tm_sec = 0;
+        sprintf(option->value, "%02d", RTCtimeBuf.tm_sec);
+    }
+    if (option->id == 'C') {
+        //use RTCtimeBuf struct to update RTC time
+    }
 
+    return event == RG_DIALOG_ENTER;
+}
+
+static bool rtc_set_time_cb(dialog_choice_t *option, dialog_event_t event)
+{
     if (event == RG_DIALOG_ENTER) {
-        dialog_choice_t options[] = {
-            {200, "Master Enable", "...", 1, &rtc_enable_cb},
-            {201, "Date Format  ", "...", 1, &rtc_format_cb},
-            {202, "Month Text   ", "...", 1, &rtc_month_text_cb},
-            {203, "12h or 24h   ", "...", 1, &rtc_hour_pref_cb},
+        static dialog_choice_t choices[] = {
+            {'Y', "Year", "0000", 1, &rtc_t_set_cb},
+            {'M', "Month", "00", 1, &rtc_t_set_cb},
+            {'d', "Day of Month", "00", 1, &rtc_t_set_cb},
+            {'D', "Day of Week", "0", 1, &rtc_t_set_cb},
+            {'h', "Hour", "00", 1, &rtc_t_set_cb},
+            {'m', "Min",  "00", 1, &rtc_t_set_cb},
+            {'s', "Sec",  "00", 1, &rtc_t_set_cb},
+            {'C', "Commit Changes", "", 1, &rtc_t_set_cb},
             RG_DIALOG_CHOICE_LAST
         };
-        rg_gui_dialog("DS3231M RTC Settings", options, 0);
+        rg_gui_dialog("Set RTC Date & Time", choices, 0);
+    }
+    return event == RG_DIALOG_ENTER;
+}
+
+static bool rtc_state_cb(dialog_choice_t *option, dialog_event_t event)
+{
+    if (event == RG_DIALOG_ENTER) {
+        dialog_choice_t options[] = {
+            {202, "Date Format    ", "...", gui.rtc_enable, &rtc_format_cb},
+            {203, "Month Text     ", "...", gui.rtc_enable, &rtc_month_text_cb},
+            {204, "12h or 24h     ", "...", gui.rtc_enable, &rtc_hour_pref_cb},
+            {205, "Set Date & Time", "", gui.rtc_enable, &rtc_set_time_cb},
+            RG_DIALOG_CHOICE_LAST
+        };
+        
+        rg_gui_dialog("DS3231M RTC Date/Time Settings", options, 0);
     }
     return false;
+}
 
+static bool rtc_master_enable_cb(dialog_choice_t *option, dialog_event_t event)
+{
+    if (event == RG_DIALOG_ENTER) {
+        dialog_choice_t options[] = {
+            {200, "Master Enable     ", "...", 1, &rtc_enable_cb},
+            {201, "Date/Time Settings", "", 1, &rtc_state_cb},
+            RG_DIALOG_CHOICE_LAST
+        };
+        //putting the rest of the settings inside another sub menu so they're greyed out
+        //properly when the master enable is OFF
+        
+        rg_gui_dialog("DS3231M RTC Settings", options, 0);
+        
+    }
+    return false;
 }
 
 static inline bool tab_enabled(tab_t *tab)
@@ -296,7 +384,7 @@ void retro_loop(i2c_dev_t dev)
                     {0, "Preview    ", "...",  1, &show_preview_cb},
                     {0, "    - Delay", "...",  1, &show_preview_speed_cb},
                     {0, "Startup app", "...",  1, &startup_app_cb},
-                    {0, "DS3231M RTC Settings", "",     1, &rtc_state_cb},
+                    {0, "DS3231M RTC Settings", "",     1, &rtc_master_enable_cb},
                     RG_DIALOG_CHOICE_LAST
                 };
                 rg_gui_settings_menu(choices);
@@ -339,6 +427,7 @@ void retro_loop(i2c_dev_t dev)
         if((last_rtc_enable != gui.rtc_enable) && last_rtc_enable == 0)
         {
             //initialize the RTC if it isn't already -> requires reboot.
+            rg_gui_alert("DS3231M",  "Restarting to initialize RTC.");
             rg_system_restart();
         }
         
@@ -346,6 +435,8 @@ void retro_loop(i2c_dev_t dev)
         if(rg_settings_int32_get(KEY_RTC_ENABLE, gui.rtc_enable) > 0)
         {
             rg_gui_draw_time(rg_rtc_getTime(dev), 58, 0, gui.rtc_format, gui.rtc_month_text, gui.rtc_hour_pref);
+            RTCtimeBuf = rg_rtc_getTime(dev);
+            
         }
         
         usleep(15 * 1000UL);

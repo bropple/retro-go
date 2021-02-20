@@ -229,17 +229,14 @@ void DS3231_InjectRTC(i2c_dev_t dev){
 
 void app_main(void)
 {
-    i2c_dev_t dev = rg_system_init(APP_ID, AUDIO_SAMPLE_RATE);
-    rg_emu_init(&LoadState, &SaveState, &netplay_callback);
-    
-    rg_emu_proc_t handlers = {
+ rg_emu_proc_t handlers = {
         .loadState = &load_state,
         .saveState = &save_state,
         .reset = &reset_emulation,
         .netplay = &netplay_callback,
     };
 
-    rg_system_init(APP_ID, AUDIO_SAMPLE_RATE);
+    i2c_dev_t dev = rg_system_init(APP_ID, AUDIO_SAMPLE_RATE);
     rg_emu_init(handlers);
 
     app = rg_system_get_app();
@@ -290,12 +287,7 @@ void app_main(void)
     {
         sram_load(sramFile);
     }
-    
-    if(rg_settings_int32_get("RTCenable", 0) > 0)
-    //if the RTC is enabled
-    {
-        DS3231_InjectRTC(dev); //replace gnuboy's RTC values with the DS3231's
-    }
+
     while (true)
     {
         gamepad_state_t joystick = rg_input_read_gamepad();

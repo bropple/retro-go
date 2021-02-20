@@ -878,8 +878,8 @@ struct tm rg_rtc_getTime(i2c_dev_t dev)
 }
 
 char * months_EN[13] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Err" };
-
 char * days_EN[8] = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun", "Err"};
+uint8_t daysInMonth[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
 
 char * rg_rtc_getMonth_text(int month)
 {
