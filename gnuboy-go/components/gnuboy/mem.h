@@ -3,13 +3,21 @@
 
 #include "emu.h"
 
-#define MBC_NONE 0
-#define MBC_MBC1 1
-#define MBC_MBC2 2
-#define MBC_MBC3 3
-#define MBC_MBC5 5
-#define MBC_HUC1 0xC1
-#define MBC_HUC3 0xC3
+enum {
+	MBC_NONE = 0,
+	MBC_MBC1,
+	MBC_MBC2,
+	MBC_MBC3,
+	MBC_MBC5,
+	MBC_MBC6,
+	MBC_MBC7,
+	MBC_HUC1,
+	MBC_HUC3,
+	MBC_MMM01,
+};
+
+// This must be a power of 2
+#define SRAM_SECTOR_SIZE 1024
 
 struct mbc
 {
@@ -21,6 +29,7 @@ struct mbc
 	int ramsize;
 	int enableram;
 	int rumble;
+	int sensor;
 	int batt;
 	int rtc;
 	byte *rmap[0x10];
@@ -31,16 +40,19 @@ struct rom
 {
 	byte *bank[512];
 	char name[20];
-	int length;
-	int checksum;
+	un16 checksum;
 };
 
 struct ram
 {
 	byte hi[256];
 	byte ibank[8][4096];
-	byte (*sbank)[8192];
-	byte sram_dirty;
+	union {
+		byte (*sbank)[8192];
+		byte *sram;
+	};
+	un32 sram_dirty;
+	byte sram_dirty_sector[256];
 };
 
 
@@ -52,7 +64,7 @@ extern struct ram ram;
 void mem_updatemap();
 void mem_write(addr_t a, byte b);
 byte mem_read(addr_t a);
-void mbc_reset(bool hard);
+void mem_reset(bool hard);
 
 static inline byte readb(addr_t a)
 {

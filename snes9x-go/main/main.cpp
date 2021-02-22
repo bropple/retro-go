@@ -13,7 +13,6 @@
 #include "../components/snes9x/gfx.h"
 #include "../components/snes9x/snapshot.h"
 #include "../components/snes9x/controls.h"
-#include "../components/snes9x/display.h"
 
 #include "keymap.h"
 
@@ -41,65 +40,6 @@ static keymap_t keymap;
 // static bool netplay = false;
 // --- MAIN
 
-void _splitpath(const char *path, char *drive, char *dir, char *fname, char *ext)
-{
-	*drive = 0;
-
-	const char *slash = strrchr(path, SLASH_CHAR),
-			   *dot = strrchr(path, '.');
-
-	if (dot && slash && dot < slash)
-		dot = NULL;
-
-	if (!slash)
-	{
-		*dir = 0;
-
-		strcpy(fname, path);
-
-		if (dot)
-		{
-			fname[dot - path] = 0;
-			strcpy(ext, dot + 1);
-		}
-		else
-			*ext = 0;
-	}
-	else
-	{
-		strcpy(dir, path);
-		dir[slash - path] = 0;
-
-		strcpy(fname, slash + 1);
-
-		if (dot)
-		{
-			fname[dot - slash - 1] = 0;
-			strcpy(ext, dot + 1);
-		}
-		else
-			*ext = 0;
-	}
-}
-
-void _makepath(char *path, const char *, const char *dir, const char *fname, const char *ext)
-{
-	if (dir && *dir)
-	{
-		strcpy(path, dir);
-		strcat(path, SLASH_STR);
-	}
-	else
-		*path = 0;
-
-	strcat(path, fname);
-
-	if (ext && *ext)
-	{
-		strcat(path, ".");
-		strcat(path, ext);
-	}
-}
 
 const char *S9xGetDirectory(enum s9x_getdirtype dirtype)
 {
@@ -153,18 +93,6 @@ const char *S9xBasename(const char *f)
 	return rg_get_filename(f);
 }
 
-bool8 S9xOpenSnapshotFile(const char *filename, bool8 read_only, STREAM *file)
-{
-	if ((*file = OPEN_STREAM(filename, read_only ? "rb" : "wb")))
-		return (TRUE);
-	return (FALSE);
-}
-
-void S9xCloseSnapshotFile(STREAM file)
-{
-	CLOSE_STREAM(file);
-}
-
 void S9xTextMode(void)
 {
 	// This is only used by the debugger
@@ -197,11 +125,6 @@ bool8 S9xDeinitUpdate(int width, int height)
 }
 
 void S9xSyncSpeed(void)
-{
-
-}
-
-void S9xHandlePortCommand(s9xcommand_t cmd, int16 data1, int16 data2)
 {
 
 }
@@ -277,7 +200,7 @@ static bool menu_keymap_cb(dialog_choice_t *option, dialog_event_t event)
     return false;
 }
 
-static bool save_state(char *pathName)
+static bool save_state_handler(char *pathName)
 {
 	if (S9xFreezeGame(pathName))
 	{
@@ -294,7 +217,7 @@ static bool save_state(char *pathName)
 	return false;
 }
 
-static bool load_state(char *pathName)
+static bool load_state_handler(char *pathName)
 {
 	bool ret = false;
 
@@ -310,7 +233,7 @@ static bool load_state(char *pathName)
 	return ret;
 }
 
-static bool reset_emulation(bool hard)
+static bool reset_handler(bool hard)
 {
 	if (hard)
 		S9xReset();
@@ -339,9 +262,6 @@ static void snes9x_task(void *arg)
 
 	GFX.Pitch = SNES_WIDTH * 2;
 	GFX.Screen = (uint16*)currentUpdate->buffer;
-
-	S9xSetController(0, CTL_JOYPAD, 0, 0, 0, 0);
-	S9xSetController(1, CTL_NONE, 1, 0, 0, 0);
 
 	update_keymap(rg_settings_app_int32_get(NVS_KEY_KEYMAP, 0));
 
@@ -426,15 +346,15 @@ static void snes9x_task(void *arg)
 
 extern "C" void app_main(void)
 {
-    rg_emu_proc_t handlers = {
-        .loadState = &load_state,
-        .saveState = &save_state,
-		.reset = &reset_emulation,
+	rg_emu_proc_t handlers = {
+		.loadState = &load_state_handler,
+		.saveState = &save_state_handler,
+		.reset = &reset_handler,
 		.netplay = NULL,
-    };
+	};
 
-    rg_system_init(APP_ID, AUDIO_SAMPLE_RATE);
-    rg_emu_init(handlers);
+	rg_system_init(APP_ID, AUDIO_SAMPLE_RATE);
+	rg_emu_init(&handlers);
 
 	app = rg_system_get_app();
 

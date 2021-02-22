@@ -114,11 +114,18 @@ _Note: many other versions of esp-idf will work but at least 3.3.0, 4.0.0, 4.1.0
 1. `rg_tool.py build-fw`
 
 For a smaller build you can also specify which apps you want, for example the launcher + nes/gameboy only:
-1. `rg_tool.py build-fw retro-go nofrendo-go gnuboy-go`
+1. `rg_tool.py build-fw launcher nofrendo-go gnuboy-go`
 
 ## Build, flash, and monitor individual apps for faster development:
 1. `rg_tool.py run nofrendo-go --offset=0x100000 --port=COM3`
 * Offset is required only if you use my multi-firmware AND retro-go isn't the first installed application, in which case the offset is shown in the multi-firmware.
+
+
+# Porting
+I don't want to maintain other ports in this repository but let me know if I can make small changes to make your own port easier. The minimum requirements for Retro-Go are roughly:
+- Processor: 200Mhz 16 or 32bit little-endian with unaligned memory access
+- Memory: 2MB
+- Compiler: C99
 
 
 # Acknowledgements

@@ -42,7 +42,7 @@ static bool netplay = false;
 // --- MAIN
 
 
-static void netplay_callback(netplay_event_t event, void *arg)
+static void netplay_handler(netplay_event_t event, void *arg)
 {
 #ifdef ENABLE_NETPLAY
     bool new_netplay;
@@ -84,7 +84,7 @@ static void netplay_callback(netplay_event_t event, void *arg)
 #endif
 }
 
-static bool save_state(char *pathName)
+static bool save_state_handler(char *pathName)
 {
     if (state_save(pathName) >= 0)
     {
@@ -99,7 +99,7 @@ static bool save_state(char *pathName)
     return false;
 }
 
-static bool load_state(char *pathName)
+static bool load_state_handler(char *pathName)
 {
     if (state_load(pathName) < 0)
     {
@@ -109,7 +109,7 @@ static bool load_state(char *pathName)
     return true;
 }
 
-static bool reset_emulation(bool hard)
+static bool reset_handler(bool hard)
 {
     nes_reset(hard ? HARD_RESET : SOFT_RESET);
     return true;
@@ -319,6 +319,8 @@ void osd_blitscreen(uint8 *bmp)
     int crop_v = (overscan) ? nes->overscan : 0;
     int crop_h = (autocrop == 2) || (autocrop == 1 && nes->ppu->left_bg_counter > 210) ? 8 : 0;
 
+    // A rolling average should be used for autocrop == 1, it causes jitter in some games...
+
     currentUpdate->buffer = NES_SCREEN_GETPTR(bmp, crop_h, crop_v);
     currentUpdate->stride = NES_SCREEN_PITCH;
     currentUpdate->width = NES_SCREEN_WIDTH - (crop_h * 2);
@@ -383,14 +385,14 @@ void osd_getinput(void)
 void app_main(void)
 {
     rg_emu_proc_t handlers = {
-        .loadState = &load_state,
-        .saveState = &save_state,
-        .reset = &reset_emulation,
-        .netplay = &netplay_callback,
+        .loadState = &load_state_handler,
+        .saveState = &save_state_handler,
+        .reset = &reset_handler,
+        .netplay = &netplay_handler,
     };
 
     rg_system_init(APP_ID, AUDIO_SAMPLE_RATE);
-    rg_emu_init(handlers);
+    rg_emu_init(&handlers);
 
     app = rg_system_get_app();
 
