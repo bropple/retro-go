@@ -1648,14 +1648,10 @@ void S9xEndScreenRefresh (void)
 	{
 		FLUSH_REDRAW();
 
-		S9xControlEOF();
-
 		S9xDisplayMessages(GFX.Screen, GFX.PPL, IPPU.RenderedScreenWidth, IPPU.RenderedScreenHeight, 1);
 
 		S9xDeinitUpdate(IPPU.RenderedScreenWidth, IPPU.RenderedScreenHeight);
 	}
-	else
-		S9xControlEOF();
 
 #ifdef DEBUGGER
 	if (CPU.Flags & FRAME_ADVANCE_FLAG)
