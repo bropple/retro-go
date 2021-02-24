@@ -35,6 +35,8 @@
 #define INPUT_TIMEOUT 5000000
 #endif
 
+#define USE_CONFIG_FILE
+
 typedef struct
 {
     uint32_t magicWord;
@@ -285,9 +287,10 @@ i2c_dev_t rg_system_init(int appId, int sampleRate)
     
     //Start up external RTC - must be enabled first.
     i2c_dev_t dev;
-    if(rg_settings_int32_get("RTCenable", 0) > 0)
+    if(rg_settings_int32_get("RTCenable", 0) == 1)
     {
         dev = rg_rtc_init();
+        RG_LOGE("DS3231M is initialized.\n");
     }
     //rg_rtc_debug(rg_rtc_getTime(dev));
 
@@ -344,7 +347,7 @@ i2c_dev_t rg_system_init(int appId, int sampleRate)
     panicTrace->magicWord = 0;
 
     RG_LOGI("Retro-Go init done.\n\n");
-     return dev;
+    return dev;
 }
 
 void rg_emu_init(const rg_emu_proc_t *handlers)

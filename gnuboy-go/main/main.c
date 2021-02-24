@@ -250,6 +250,9 @@ void DS3231_InjectRTC(i2c_dev_t dev){
     //this function 'hijacks' the RTC of the emulator once to overwrite the 
     //DS3231's time values over the GB's. The emulator keeps it ticking on its own while it runs.
     
+    //NOTE: The injection WILL NOT WORK if esp-idf
+    //isn't patched!
+    
     struct tm rtcinfo = rg_rtc_getTime(dev);
     
     rtc.d = dayOfYear(rtcinfo.tm_year, rtcinfo.tm_mon + 1, rtcinfo.tm_mday);
@@ -257,10 +260,9 @@ void DS3231_InjectRTC(i2c_dev_t dev){
     rtc.m = rtcinfo.tm_min;
     rtc.s = rtcinfo.tm_sec;
     
-    char message[36] = { 0 };
-    sprintf(message, "%03d %02d %02d %02d", rtc.d, rtc.h, rtc.m, rtc.s);
-    rg_display_clear(C_BLUE);
-    rg_gui_alert("GB RTC Values",  message);
+   RG_LOGE("RTC values have been injected.\n");
+   
+   rg_gui_alert("DS3231M",  "RTC values have been injected.");
 }
 
 void app_main(void)
@@ -323,6 +325,10 @@ void app_main(void)
     {
         sram_load(sramFile);
     }
+    
+    //inject DS3231M RTC value into emulator, if present and enable.
+    //if(rg_settings_int32_get("RTCenable", 0) > 0)
+    DS3231_InjectRTC(dev);
 
     while (true)
     {
