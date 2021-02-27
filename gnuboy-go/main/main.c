@@ -17,7 +17,7 @@
 #define AUDIO_SAMPLE_RATE   (32000)
 #define AUDIO_BUFFER_LENGTH (AUDIO_SAMPLE_RATE / 16 + 1)
 
-#define NVS_KEY_SAVE_SRAM "sram"
+#define SETTING_SAVE_SRAM "sram"
 
 static short audioBuffer[AUDIO_BUFFER_LENGTH * 2];
 
@@ -160,7 +160,7 @@ static dialog_return_t sram_autosave_cb(dialog_option_t *option, dialog_event_t 
 
     if (event == RG_DIALOG_PREV || event == RG_DIALOG_NEXT)
     {
-        rg_settings_app_int32_set(NVS_KEY_SAVE_SRAM, autoSaveSRAM);
+        rg_settings_app_int32_set(SETTING_SAVE_SRAM, autoSaveSRAM);
     }
 
     if (autoSaveSRAM == 0) strcpy(option->value, "Off ");
@@ -277,7 +277,7 @@ void app_main(void)
     frames[0].buffer = rg_alloc(GB_WIDTH * GB_HEIGHT * 2, MEM_ANY);
     frames[1].buffer = rg_alloc(GB_WIDTH * GB_HEIGHT * 2, MEM_ANY);
 
-    autoSaveSRAM = rg_settings_app_int32_get(NVS_KEY_SAVE_SRAM, 0);
+    autoSaveSRAM = rg_settings_app_int32_get(SETTING_SAVE_SRAM, 0);
     sramFile = rg_emu_get_path(EMU_PATH_SAVE_SRAM, 0);
 
     // Load ROM

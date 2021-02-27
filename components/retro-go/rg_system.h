@@ -165,7 +165,9 @@ extern uint32_t crc32_le(uint32_t crc, const uint8_t * buf, uint32_t len);
 #define RG_LOGW(x, ...) printf(" ! %s: " x, __func__, ## __VA_ARGS__)
 #define RG_LOGI(x, ...) printf("%s: " x, __func__, ## __VA_ARGS__)
 //#define RG_LOGD(x, ...) printf("> %s: " x, __func__, ## __VA_ARGS__)
-#define RG_LOGD(x...) {}
+#define RG_LOGD(x, ...) {}
+
+#define RG_DUMP(...) {}
 
 // Attributes
 

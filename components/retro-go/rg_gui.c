@@ -21,15 +21,20 @@ static const dialog_theme_t default_theme = {
     .item_standard = C_WHITE,
     .item_disabled = C_GRAY, // C_DIM_GRAY
 };
+
 static dialog_theme_t theme;
 static font_info_t font_info;
 
+static const char *SETTING_FONTSIZE     = "FontSize";
+// static const char *SETTING_FONTTYPE     = "FontType";
+
 #define wait_all_keys_released() while (rg_input_key_is_pressed(GAMEPAD_KEY_ANY))
+
 
 void rg_gui_init(void)
 {
     overlay_buffer = (uint16_t *)rg_alloc(RG_SCREEN_WIDTH * 32 * 2, MEM_SLOW);
-    rg_gui_set_font_size(rg_settings_FontSize_get());
+    rg_gui_set_font_size(rg_settings_int32_get(SETTING_FONTSIZE, 8));
     rg_gui_set_theme(&default_theme);
 }
 
@@ -45,7 +50,7 @@ void rg_gui_set_font_size(int points)
     font_info.points = RG_MAX(8, RG_MIN(32, points));
     font_info.height = font_info.points;
     font_info.width = 8;
-    rg_settings_FontSize_set(points);
+    rg_settings_int32_set(SETTING_FONTSIZE, font_info.points);
 }
 
 font_info_t rg_gui_get_font_info(void)
@@ -501,16 +506,16 @@ void rg_gui_alert(const char *title, const char *message)
 
 static dialog_return_t volume_update_cb(dialog_option_t *option, dialog_event_t event)
 {
-    int8_t level = rg_audio_volume_get();
+    int8_t level = rg_audio_get_volume();
     int8_t min = RG_AUDIO_VOL_MIN;
     int8_t max = RG_AUDIO_VOL_MAX;
 
     if (event == RG_DIALOG_PREV && level > min) {
-        rg_audio_volume_set(--level);
+        rg_audio_set_volume(--level);
     }
 
     if (event == RG_DIALOG_NEXT && level < max) {
-        rg_audio_volume_set(++level);
+        rg_audio_set_volume(++level);
     }
 
     sprintf(option->value, "%d/%d", level, max);
@@ -668,13 +673,13 @@ int rg_gui_game_settings_menu(dialog_option_t *extra_options)
     // Collect stats before freezing emulation with wait_all_keys_released()
     runtime_stats_t stats = rg_system_get_stats();
 
-    rg_audio_mute(true);
+    rg_audio_set_mute(true);
     wait_all_keys_released();
     draw_game_status_bar(stats);
 
     int r = rg_gui_settings_menu(options);
 
-    rg_audio_mute(false);
+    rg_audio_set_mute(false);
 
     return r;
 }
@@ -739,7 +744,7 @@ int rg_gui_game_menu(void)
     // Collect stats before freezing emulation with wait_all_keys_released()
     runtime_stats_t stats = rg_system_get_stats();
 
-    rg_audio_mute(true);
+    rg_audio_set_mute(true);
     wait_all_keys_released();
     draw_game_status_bar(stats);
 
@@ -757,7 +762,7 @@ int rg_gui_game_menu(void)
         case 100: rg_system_switch_app(RG_APP_LAUNCHER); break;
     }
 
-    rg_audio_mute(false);
+    rg_audio_set_mute(false);
 
     return r;
 }

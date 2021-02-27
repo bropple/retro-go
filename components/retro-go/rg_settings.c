@@ -16,10 +16,7 @@
 static const char* Key_RomFilePath  = "RomFilePath";
 static const char* Key_StartAction  = "StartAction";
 static const char* Key_Backlight    = "Backlight";
-static const char* Key_AudioSink    = "AudioSink";
-static const char* Key_Volume       = "Volume";
 static const char* Key_StartupApp   = "StartupApp";
-static const char* Key_FontSize     = "FontSize";
 static const char* Key_DiskActivity = "DiskActivity";
 // static const char* Key_RetroGoVer   = "RetroGoVer";
 // Per-app
@@ -218,16 +215,6 @@ void rg_settings_app_int32_set(const char *key, int32_t value)
 }
 
 
-int32_t rg_settings_FontSize_get()
-{
-    return rg_settings_int32_get(Key_FontSize, 8);
-}
-void rg_settings_FontSize_set(int32_t value)
-{
-    rg_settings_int32_set(Key_FontSize, value);
-}
-
-
 char* rg_settings_RomFilePath_get()
 {
     return rg_settings_string_get(Key_RomFilePath, NULL);
@@ -235,26 +222,6 @@ char* rg_settings_RomFilePath_get()
 void rg_settings_RomFilePath_set(const char* value)
 {
     rg_settings_string_set(Key_RomFilePath, value);
-}
-
-
-int32_t rg_settings_Volume_get()
-{
-    return rg_settings_int32_get(Key_Volume, RG_AUDIO_VOL_DEFAULT);
-}
-void rg_settings_Volume_set(int32_t value)
-{
-    rg_settings_int32_set(Key_Volume, value);
-}
-
-
-int32_t rg_settings_AudioSink_get()
-{
-    return rg_settings_int32_get(Key_AudioSink, RG_AUDIO_SINK_SPEAKER);
-}
-void rg_settings_AudioSink_set(int32_t value)
-{
-    rg_settings_int32_set(Key_AudioSink, value);
 }
 
 
