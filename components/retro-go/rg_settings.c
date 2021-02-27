@@ -147,7 +147,7 @@ char *rg_settings_string_get(const char *key, const char *default_value)
 {
     if (!initialized)
     {
-        RG_LOGE("Trying to get key '%s' before rg_settings_init() was called!\n", key);
+        RG_LOGW("Trying to get key '%s' before rg_settings_init() was called!\n", key);
     }
     else
     {
@@ -165,7 +165,7 @@ void rg_settings_string_set(const char *key, const char *value)
 {
     if (!initialized)
     {
-        RG_LOGE("Trying to set key '%s' before rg_settings_init() was called!\n", key);
+        RG_LOGW("Trying to set key '%s' before rg_settings_init() was called!\n", key);
         return;
     }
 
@@ -177,7 +177,7 @@ int32_t rg_settings_int32_get(const char *key, int32_t default_value)
 {
     if (!initialized)
     {
-        RG_LOGE("Trying to get key '%s' before rg_settings_init() was called!\n", key);
+        RG_LOGW("Trying to get key '%s' before rg_settings_init() was called!\n", key);
         return default_value;
     }
 
@@ -190,7 +190,7 @@ void rg_settings_int32_set(const char *key, int32_t value)
 {
     if (!initialized)
     {
-        RG_LOGE("Trying to set key '%s' before rg_settings_init() was called!\n", key);
+        RG_LOGW("Trying to set key '%s' before rg_settings_init() was called!\n", key);
         return;
     }
     else if (rg_settings_int32_get(key, ~value) == value)

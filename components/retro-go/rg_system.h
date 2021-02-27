@@ -4,18 +4,11 @@
 extern "C" {
 #endif
 
-#include <esp_idf_version.h>
 #include <esp_attr.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
-
-#if defined(ESP_IDF_VERSION_MAJOR) && ESP_IDF_VERSION_MAJOR >= 4
-#include <esp32/rom/crc.h>
-#else
-#include <rom/crc.h>
-#endif
 
 #include "config.h"
 
