@@ -656,11 +656,12 @@ int rg_system_get_led(void)
 IRAM_ATTR void rg_spi_lock_acquire(spi_lock_res_t owner)
 {
 #if USE_SPI_MUTEX
-    if (owner == spiMutexOwner)
-    {
-        return;
-    }
-    else if (xSemaphoreTake(spiMutex, pdMS_TO_TICKS(10000)) == pdPASS)
+    // if (owner == spiMutexOwner)
+    // {
+    //     return;
+    // }
+    // else
+    if (xSemaphoreTake(spiMutex, pdMS_TO_TICKS(10000)) == pdPASS)
     {
         spiMutexOwner = owner;
     }
@@ -674,7 +675,7 @@ IRAM_ATTR void rg_spi_lock_acquire(spi_lock_res_t owner)
 IRAM_ATTR void rg_spi_lock_release(spi_lock_res_t owner)
 {
 #if USE_SPI_MUTEX
-    if (owner == spiMutexOwner || owner == SPI_LOCK_ANY)
+    // if (owner == spiMutexOwner || owner == SPI_LOCK_ANY)
     {
         xSemaphoreGive(spiMutex);
         spiMutexOwner = SPI_LOCK_ANY;
