@@ -216,7 +216,7 @@ void osd_input_read(void)
     else if (joystick.values[GAMEPAD_KEY_VOLUME])
     {
         dialog_option_t options[] = {
-            {101, "More...", "", 1, &advanced_settings_cb},
+            {101, "More...", NULL, 1, &advanced_settings_cb},
             RG_DIALOG_CHOICE_LAST};
         rg_gui_game_settings_menu(options);
     }

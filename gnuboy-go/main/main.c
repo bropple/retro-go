@@ -200,7 +200,7 @@ static dialog_return_t rtc_t_update_cb(dialog_option_t *option, dialog_event_t e
 static dialog_return_t rtc_update_cb(dialog_option_t *option, dialog_event_t event)
 {
     if (event == RG_DIALOG_ENTER) {
-        static dialog_option_t choices[] = {
+        dialog_option_t choices[] = {
             {'d', "Day", "000", 1, &rtc_t_update_cb},
             {'h', "Hour", "00", 1, &rtc_t_update_cb},
             {'m', "Min",  "00", 1, &rtc_t_update_cb},
@@ -217,10 +217,10 @@ static dialog_return_t advanced_settings_cb(dialog_option_t *option, dialog_even
 {
     if (event == RG_DIALOG_ENTER) {
         dialog_option_t options[] = {
-            {101, "Set clock", "00:00 ", 1, &rtc_update_cb},
+            {101, "Set clock", "00:00", 1, &rtc_update_cb},
             RG_DIALOG_SEPARATOR,
             {111, "Auto save SRAM", "Off", mbc.batt && mbc.ramsize, &sram_autosave_cb},
-            {112, "Save SRAM now ", "", mbc.batt && mbc.ramsize, &sram_save_now_cb},
+            {112, "Save SRAM now ", NULL, mbc.batt && mbc.ramsize, &sram_save_now_cb},
             RG_DIALOG_CHOICE_LAST
         };
         rg_gui_dialog("Advanced", options, 0);
@@ -326,7 +326,7 @@ void app_main(void)
         else if (joystick.values[GAMEPAD_KEY_VOLUME]) {
             dialog_option_t options[] = {
                 {100, "Palette", "7/7", !hw.cgb, &palette_update_cb},
-                {101, "More...", "", 1, &advanced_settings_cb},
+                {101, "More...", NULL, 1, &advanced_settings_cb},
                 RG_DIALOG_CHOICE_LAST
             };
             auto_sram_update();

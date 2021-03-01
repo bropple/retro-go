@@ -192,25 +192,27 @@ void retro_loop()
                 if (gui.joystick.values[i]) last_key = i;
 
             if (last_key == GAMEPAD_KEY_MENU) {
-                dialog_option_t choices[] = {
-                    {0, "Ver.", "build string", 1, NULL},
-                    {0, "Date", "", 1, NULL},
+                char buildstr[32], datestr[32];
+
+                dialog_option_t options[] = {
+                    {0, "Ver.", buildstr, 1, NULL},
+                    {0, "Date", datestr, 1, NULL},
                     {0, "By", "ducalex", 1, NULL},
                     RG_DIALOG_SEPARATOR,
-                    {1, "Reboot to firmware", "", 1, NULL},
-                    {2, "Reset settings", "", 1, NULL},
-                    {0, "Close", "", 1, NULL},
+                    {1, "Reboot to firmware", NULL, 1, NULL},
+                    {2, "Reset settings", NULL, 1, NULL},
+                    {0, "Close", NULL, 1, NULL},
                     RG_DIALOG_CHOICE_LAST
                 };
 
                 const esp_app_desc_t *app = esp_ota_get_app_description();
-                sprintf(choices[0].value, "%.30s", app->version);
-                sprintf(choices[1].value, "%s %.5s", app->date, app->time);
+                sprintf(buildstr, "%.30s", app->version);
+                sprintf(datestr, "%s %.5s", app->date, app->time);
 
                 if (strstr(app->version, "-0-") == strrchr(app->version, '-') - 2)
-                    sprintf(strstr(choices[0].value, "-0-") , " (%s)", strrchr(app->version, '-') + 1);
+                    sprintf(strstr(buildstr, "-0-") , " (%s)", strrchr(app->version, '-') + 1);
 
-                int sel = rg_gui_dialog("Retro-Go", choices, -1);
+                int sel = rg_gui_dialog("Retro-Go", options, -1);
                 if (sel == 1) {
                     rg_system_switch_app(RG_APP_FACTORY);
                 }
@@ -223,7 +225,7 @@ void retro_loop()
                 gui_redraw();
             }
             else if (last_key == GAMEPAD_KEY_VOLUME) {
-                dialog_option_t choices[] = {
+                dialog_option_t options[] = {
                     RG_DIALOG_SEPARATOR,
                     {0, "Color theme", "...",  1, &color_shift_cb},
                     {0, "Font size  ", "...",  1, &font_size_cb},
@@ -234,7 +236,7 @@ void retro_loop()
                     {0, "Disk LED   ", "off",  1, &disk_activity_cb},
                     RG_DIALOG_CHOICE_LAST
                 };
-                rg_gui_settings_menu(choices);
+                rg_gui_settings_menu(options);
                 gui_redraw();
             }
             else if (last_key == GAMEPAD_KEY_SELECT) {

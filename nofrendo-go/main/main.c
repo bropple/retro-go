@@ -347,7 +347,7 @@ void osd_getinput(void)
     {
         dialog_option_t options[] = {
             {100, "Palette", "Default", 1, &palette_update_cb},
-            {101, "More...", "", 1, &advanced_settings_cb},
+            {101, "More...", NULL, 1, &advanced_settings_cb},
             RG_DIALOG_CHOICE_LAST};
         rg_gui_game_settings_menu(options);
     }
