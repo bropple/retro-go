@@ -1375,11 +1375,7 @@ uint8 S9xGetCPU (uint32 Address)
 			case 0x421d: // JOY3H
 			case 0x421e: // JOY4L
 			case 0x421f: // JOY4H
-<<<<<<< HEAD
 				return (Memory.FillRAM[Address - 0x2000]);
-=======
-				return (Memory.FillRAM[Address]);
->>>>>>> 1.24-pre3-RTC
 
 			default:
 				return (OpenBus);

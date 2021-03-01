@@ -117,7 +117,7 @@ static dialog_return_t color_shift_cb(dialog_option_t *option, dialog_event_t ev
     return RG_DIALOG_IGNORE;
 }
 
-static bool rtc_enable_cb(dialog_choice_t *option, dialog_event_t event)
+static dialog_return_t rtc_enable_cb(dialog_option_t *option, dialog_event_t event)
 {
     if (event == RG_DIALOG_PREV || event == RG_DIALOG_NEXT) {
         gui.rtc_enable = gui.rtc_enable ? 0 : 1;
@@ -129,7 +129,7 @@ static bool rtc_enable_cb(dialog_choice_t *option, dialog_event_t event)
     return event == RG_DIALOG_ENTER;
 }
 
-static bool rtc_format_cb(dialog_choice_t *option, dialog_event_t event)
+static dialog_return_t rtc_format_cb(dialog_option_t *option, dialog_event_t event)
 {
     if (event == RG_DIALOG_PREV) {
         if (--gui.rtc_format < 0) gui.rtc_format = 2;
@@ -144,7 +144,7 @@ static bool rtc_format_cb(dialog_choice_t *option, dialog_event_t event)
     return event == RG_DIALOG_ENTER;
 }
 
-static bool rtc_month_text_cb(dialog_choice_t *option, dialog_event_t event)
+static dialog_return_t rtc_month_text_cb(dialog_option_t *option, dialog_event_t event)
 {
     if (event == RG_DIALOG_PREV || event == RG_DIALOG_NEXT) {
         gui.rtc_month_text = gui.rtc_month_text ? 0 : 1;
@@ -154,7 +154,7 @@ static bool rtc_month_text_cb(dialog_choice_t *option, dialog_event_t event)
     return event == RG_DIALOG_ENTER;
 }
 
-static bool rtc_hour_pref_cb(dialog_choice_t *option, dialog_event_t event)
+static dialog_return_t rtc_hour_pref_cb(dialog_option_t *option, dialog_event_t event)
 {
     if (event == RG_DIALOG_PREV || event == RG_DIALOG_NEXT) {
         gui.rtc_hour_pref = gui.rtc_hour_pref ? 0 : 1;
@@ -164,7 +164,7 @@ static bool rtc_hour_pref_cb(dialog_choice_t *option, dialog_event_t event)
     return event == RG_DIALOG_ENTER;
 }
 
-static bool rtc_t_set_cb(dialog_choice_t *option, dialog_event_t event)
+static dialog_return_t rtc_t_set_cb(dialog_option_t *option, dialog_event_t event)
 {
     if(option->id == 'Y') {
         //2000 min, 2090 max
@@ -213,10 +213,10 @@ static bool rtc_t_set_cb(dialog_choice_t *option, dialog_event_t event)
     return event == RG_DIALOG_ENTER;
 }
 
-static bool rtc_set_time_cb(dialog_choice_t *option, dialog_event_t event)
+static dialog_return_t rtc_set_time_cb(dialog_option_t *option, dialog_event_t event)
 {
     if (event == RG_DIALOG_ENTER) {
-        static dialog_choice_t choices[] = {
+        static dialog_option_t choices[] = {
             {'Y', "Year", "0000", 1, &rtc_t_set_cb},
             {'M', "Month", "00", 1, &rtc_t_set_cb},
             {'d', "Day of Month", "00", 1, &rtc_t_set_cb},
@@ -232,10 +232,10 @@ static bool rtc_set_time_cb(dialog_choice_t *option, dialog_event_t event)
     return event == RG_DIALOG_ENTER;
 }
 
-static bool rtc_state_cb(dialog_choice_t *option, dialog_event_t event)
+static dialog_return_t rtc_state_cb(dialog_option_t *option, dialog_event_t event)
 {
     if (event == RG_DIALOG_ENTER) {
-        dialog_choice_t options[] = {
+        dialog_option_t options[] = {
             {202, "Date Format    ", "...", gui.rtc_enable, &rtc_format_cb},
             {203, "Month Text     ", "...", gui.rtc_enable, &rtc_month_text_cb},
             {204, "12h or 24h     ", "...", gui.rtc_enable, &rtc_hour_pref_cb},
@@ -248,10 +248,10 @@ static bool rtc_state_cb(dialog_choice_t *option, dialog_event_t event)
     return false;
 }
 
-static bool rtc_master_enable_cb(dialog_choice_t *option, dialog_event_t event)
+static dialog_return_t rtc_master_enable_cb(dialog_option_t *option, dialog_event_t event)
 {
     if (event == RG_DIALOG_ENTER) {
-        dialog_choice_t options[] = {
+        dialog_option_t options[] = {
             {200, "Master Enable     ", "...", 1, &rtc_enable_cb},
             {201, "Date/Time Settings", "", 1, &rtc_state_cb},
             RG_DIALOG_CHOICE_LAST

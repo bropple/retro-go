@@ -266,23 +266,23 @@ static void Op89Slow (void)
 		ICPU._Zero = (Registers.A.W & Immediate16Slow(READ)) != 0;
 }
 
-rOP8 (24M1,     Direct,                           WRAP_BANK, BIT)
-rOP16(24M0,     Direct,                           WRAP_BANK, BIT)
-rOPM (24Slow,   DirectSlow,                       WRAP_BANK, BIT)
+rOP8 (24M1,     Direct,                           WRAP_BANK, BITS)
+rOP16(24M0,     Direct,                           WRAP_BANK, BITS)
+rOPM (24Slow,   DirectSlow,                       WRAP_BANK, BITS)
 
-rOP8 (34E0M1,   DirectIndexedXE0,                 WRAP_BANK, BIT)
-rOP16(34E0M0,   DirectIndexedXE0,                 WRAP_BANK, BIT)
-rOPM (34Slow,   DirectIndexedXSlow,               WRAP_BANK, BIT)
+rOP8 (34E0M1,   DirectIndexedXE0,                 WRAP_BANK, BITS)
+rOP16(34E0M0,   DirectIndexedXE0,                 WRAP_BANK, BITS)
+rOPM (34Slow,   DirectIndexedXSlow,               WRAP_BANK, BITS)
 
-rOP8 (2CM1,     Absolute,                         WRAP_NONE, BIT)
-rOP16(2CM0,     Absolute,                         WRAP_NONE, BIT)
-rOPM (2CSlow,   AbsoluteSlow,                     WRAP_NONE, BIT)
+rOP8 (2CM1,     Absolute,                         WRAP_NONE, BITS)
+rOP16(2CM0,     Absolute,                         WRAP_NONE, BITS)
+rOPM (2CSlow,   AbsoluteSlow,                     WRAP_NONE, BITS)
 
-rOP8 (3CM1X1,   AbsoluteIndexedXX1,               WRAP_NONE, BIT)
-rOP16(3CM0X1,   AbsoluteIndexedXX1,               WRAP_NONE, BIT)
-rOP8 (3CM1X0,   AbsoluteIndexedXX0,               WRAP_NONE, BIT)
-rOP16(3CM0X0,   AbsoluteIndexedXX0,               WRAP_NONE, BIT)
-rOPM (3CSlow,   AbsoluteIndexedXSlow,             WRAP_NONE, BIT)
+rOP8 (3CM1X1,   AbsoluteIndexedXX1,               WRAP_NONE, BITS)
+rOP16(3CM0X1,   AbsoluteIndexedXX1,               WRAP_NONE, BITS)
+rOP8 (3CM1X0,   AbsoluteIndexedXX0,               WRAP_NONE, BITS)
+rOP16(3CM0X0,   AbsoluteIndexedXX0,               WRAP_NONE, BITS)
+rOPM (3CSlow,   AbsoluteIndexedXSlow,             WRAP_NONE, BITS)
 
 /* CMP ********************************************************************* */
 

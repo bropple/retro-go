@@ -261,11 +261,7 @@ static void snes9x_task(void *arg)
 
 	GFX.Screen = (uint16*)currentUpdate->buffer;
 
-<<<<<<< HEAD
 	update_keymap(rg_settings_app_int32_get(SETTING_KEYMAP, 0));
-=======
-	update_keymap(rg_settings_app_int32_get(NVS_KEY_KEYMAP, 0));
->>>>>>> 1.24-pre3-RTC
 
 	if (!S9xMemoryInit())
 		RG_PANIC("Memory init failed!");
