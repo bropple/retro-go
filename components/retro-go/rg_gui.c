@@ -673,6 +673,7 @@ static void draw_game_status_bar(runtime_stats_t stats)
     rg_gui_draw_text(0, pad_text, width, header, C_LIGHT_GRAY, C_BLACK);
     rg_gui_draw_text(0, RG_SCREEN_HEIGHT - height + pad_text, width, footer, C_LIGHT_GRAY, C_BLACK);
     rg_gui_draw_battery(width - 26, 3);
+    
 }
 
 int rg_gui_game_settings_menu(const dialog_option_t *extra_options)
@@ -794,4 +795,92 @@ int rg_gui_game_menu(void)
     rg_audio_set_mute(false);
 
     return r;
+}
+
+char * ampm_text[2] = {"AM", "PM"};
+
+void rg_gui_draw_time(struct tm time, int x_pos, int y_pos, int format, int monthText, int hourPref)
+{   
+    //format: 0 = MDY - Used in United States
+    //        1 = DMY - Used in Mexico, South America, Africa, Middle East, ...
+    //        2 = YMD - Used in Canada, China, Japan, ...
+    
+    //monthText: 0 = Use numeric month notation, i.e. 2/4/2020 or 4/2/2020
+    //           1 = Use text month notation, i.e. Feb 4, 2020 or 4 Feb, 2020
+    
+    //hourPref:  0 = 12h - use 12 hour clock
+    //           1 = 24h - use 24 hour clock
+    
+    char time_buff[72] = { 0 };
+    int ampm = 2; //0 for am, 1 for pm, 2 for 24h
+    int time_width = 168;
+    int ampm_pos = 230;
+    int day_pos = 265;
+    
+    if (!hourPref)
+    {
+        //Using 12 hour clock, so need to get AM/PM status
+        if(time.tm_hour >= 12) 
+        {
+            time.tm_hour -= 12;
+            ampm = 1;
+        }
+        else ampm = 0;
+        if(time.tm_hour == 0) time.tm_hour = 12;
+
+    }
+    
+    if (!monthText) //there's no month text to insert, all numeric
+    {
+        if (format == 0)
+        {
+            //Month, Day, Year
+            sprintf(time_buff, "%02d/%02d/%04d %02d:%02d:%02d", time.tm_mon + 1, time.tm_mday, time.tm_year, time.tm_hour, time.tm_min, time.tm_sec);
+        }
+        else if (format == 1)
+        {
+            //Day, Month, Year
+            sprintf(time_buff, "%02d/%02d/%04d %02d:%02d:%02d", time.tm_mday, time.tm_mon + 1, time.tm_year, time.tm_hour, time.tm_min, time.tm_sec);
+        }
+        else if (format == 2)
+        {
+            //Year, Month, Day
+            sprintf(time_buff, "%04d/%02d/%02d %02d:%02d:%02d", time.tm_year, time.tm_mon + 1, time.tm_mday, time.tm_hour, time.tm_min, time.tm_sec);
+        }
+    }
+    else //we have month text
+    {
+        //These formats show month text instead of number, so we grab the text
+        char time_temp[36] = { 0 }; //temporary buffer
+        if (format == 0)
+        {
+            //Month, Day, Year
+            sprintf(time_temp," %02d, %04d %02d:%02d:%02d", time.tm_mday, time.tm_year, time.tm_hour, time.tm_min, time.tm_sec);
+            strcpy(time_buff, rg_rtc_getMonth_text(time.tm_mon));
+            strcat(time_buff, time_temp);
+        }
+        else if (format == 1)
+        {
+            //Day, Month, Year
+            sprintf(time_temp, "%02d ", time.tm_mday); //put day number in string
+            strcat(time_temp, rg_rtc_getMonth_text(time.tm_mon)); //add month text after number
+            strcpy(time_buff, time_temp); //copy temp to permanent string
+            sprintf(time_temp, ", %04d %02d:%02d:%02d", time.tm_year, time.tm_hour, time.tm_min, time.tm_sec); //fill in rest of date info
+            strcat(time_buff, time_temp); //final date string
+        }
+        else if (format == 2)
+        {
+            //Year, Month, Day
+            sprintf(time_temp, "%04d ", time.tm_year); //put year number in string
+            strcat(time_temp, rg_rtc_getMonth_text(time.tm_mon)); //add month text after number
+            strcpy(time_buff, time_temp); //copy temp to permanent string
+            sprintf(time_temp, " %02d %02d:%02d:%02d", time.tm_mday, time.tm_hour, time.tm_min, time.tm_sec); //fill in rest of date info
+            strcat(time_buff, time_temp); //final date string
+        }
+    }
+    
+    rg_gui_draw_text(x_pos, y_pos, time_width, time_buff, C_WHITE, C_BLACK);
+    if(ampm < 2) rg_gui_draw_text(ampm_pos, y_pos, 16, ampm_text[ampm], C_WHITE, C_BLACK);
+    rg_gui_draw_text(day_pos, y_pos, 24, rg_rtc_getDay_text(time.tm_wday), C_WHITE, C_BLACK);
+
 }

@@ -35,6 +35,8 @@
 #define INPUT_TIMEOUT 5000000
 #endif
 
+#define USE_CONFIG_FILE
+
 typedef struct
 {
     uint32_t magicWord;
@@ -42,6 +44,9 @@ typedef struct
     char function[64];
     char file[256];
 } panic_trace_t;
+
+//I2C descriptor struct for the DS3231M RTC.
+//Will need to be referred to by an extern in other emulators.
 
 // This is a direct pointer to rtc slow ram which isn't cleared on
 // panic. We don't use this region so we can point anywhere in it.
@@ -277,7 +282,7 @@ void rg_system_gpio_init()
     gpio_set_level(RG_GPIO_DAC2, 0);
 }
 
-void rg_system_init(int appId, int sampleRate)
+i2c_dev_t rg_system_init(int appId, int sampleRate)
 {
     const esp_app_desc_t *app = esp_ota_get_app_description();
 
@@ -309,6 +314,15 @@ void rg_system_init(int appId, int sampleRate)
     rg_audio_init(sampleRate);
     rg_display_init();
     rg_system_time_init();
+    
+    //Start up external RTC - must be enabled first.
+    i2c_dev_t dev;
+    if(rg_settings_int32_get("RTCenable", 0) == 1)
+    {
+        dev = rg_rtc_init();
+        RG_LOGE("DS3231M is initialized.\n");
+    }
+    //rg_rtc_debug(rg_rtc_getTime(dev));
 
     if (esp_reset_reason() == ESP_RST_PANIC)
     {
@@ -364,6 +378,7 @@ void rg_system_init(int appId, int sampleRate)
     initialized = true;
 
     RG_LOGI("Retro-Go init done.\n");
+    return dev;
 }
 
 void rg_emu_init(const rg_emu_proc_t *handlers)
@@ -828,4 +843,58 @@ void *rg_alloc(size_t size, uint32_t mem_type)
 void rg_free(void *ptr)
 {
     return heap_caps_free(ptr);
+}
+
+i2c_dev_t rg_rtc_init(void)
+{
+    //this will initialize the DS3231M RTC every time the launcher is started.
+    //Error message only pops up if there's a problem with initializing the RTC.
+    
+    i2c_dev_t dev;
+    
+    if (ds3231_init_desc(&dev, I2C_NUM_0, 15, 4) != ESP_OK) {
+        rg_display_clear(C_RED);
+        rg_gui_alert("DS3231M", "RTC init FAIL - Disabling.");
+        rg_settings_int32_set("RTCstate", 0);
+        dev.port = 255; //an out-of-range value for an I2C address, so we know it errored
+    }
+    
+    return dev;
+    
+}
+
+struct tm rg_rtc_getTime(i2c_dev_t dev)
+{
+    struct tm time = { 0 };
+    
+    if (ds3231_get_time(&dev, &time) != ESP_OK) {
+        rg_display_clear(C_RED);
+        rg_gui_alert("DS3231M",  "Could not get time.");
+    }
+    return time;
+}
+
+char * months_EN[13] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Err" };
+char * days_EN[8] = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun", "Err"};
+uint8_t daysInMonth[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+
+char * rg_rtc_getMonth_text(int month)
+{
+    if(month < 12) return months_EN[month]; //return month in text form
+    else return months_EN[12]; //An error has occured
+}
+
+char * rg_rtc_getDay_text(int wday)
+{
+    if(wday < 7) return days_EN[wday]; //return day in text form
+    else return days_EN[7]; //An error has occured
+}
+
+void rg_rtc_debug(struct tm rtcinfo)
+{
+        char message[36] = { 0 };
+        sprintf(message, "%04d/%02d/%02d %02d %02d %02d %03d", rtcinfo.tm_year, rtcinfo.tm_mon + 1, rtcinfo.tm_mday, rtcinfo.tm_hour, rtcinfo.tm_min, rtcinfo.tm_sec, dayOfYear(rtcinfo.tm_year, rtcinfo.tm_mon + 1, rtcinfo.tm_mday));
+        rg_display_clear(C_DARK_VIOLET);
+        rg_gui_alert("DS3231M",  message);
+        
 }

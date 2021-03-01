@@ -38,7 +38,6 @@ static bool netplay = false;
 #endif
 // --- MAIN
 
-
 static void netplay_handler(netplay_event_t event, void *arg)
 {
 #ifdef ENABLE_NETPLAY
@@ -238,7 +237,7 @@ static void screen_blit(void)
     currentUpdate = previousUpdate;
     fb.ptr = currentUpdate->buffer;
 }
-
+    
 static void auto_sram_update(void)
 {
     if (autoSaveSRAM > 0 && ram.sram_dirty)
@@ -252,6 +251,28 @@ static void auto_sram_update(void)
         }
         rg_system_set_led(0);
     }
+}
+
+void DS3231_InjectRTC(i2c_dev_t dev){
+    
+    //this function 'hijacks' the RTC of the emulator once to overwrite the 
+    //DS3231's time values over the GB's. The emulator keeps it ticking on its own while it runs.
+    
+    //NOTE: The injection WILL NOT WORK if esp-idf
+    //isn't patched!
+    
+    //Going to move this function and make it a part of rtc_sync();
+    
+    struct tm rtcinfo = rg_rtc_getTime(dev);
+    
+    rtc.d = dayOfYear(rtcinfo.tm_year, rtcinfo.tm_mon + 1, rtcinfo.tm_mday);
+    rtc.h = rtcinfo.tm_hour;
+    rtc.m = rtcinfo.tm_min;
+    rtc.s = rtcinfo.tm_sec;
+    
+   RG_LOGE("RTC values have been injected.\n");
+   
+   rg_gui_alert("DS3231M",  "RTC values have been injected.");
 }
 
 void app_main(void)
@@ -314,6 +335,10 @@ void app_main(void)
     {
         sram_load(sramFile);
     }
+    
+    //inject DS3231M RTC value into emulator, if present and enable.
+    //if(rg_settings_int32_get("RTCenable", 0) > 0)
+    //DS3231_InjectRTC(dev);
 
     while (true)
     {

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <rg_input.h>
+#include <time.h>
 #include <stdbool.h>
 #include "emulators.h"
 
@@ -68,6 +69,10 @@ typedef struct {
     int show_preview;
     int show_preview_fast;
     int idle_counter;
+    int rtc_enable;
+    int rtc_format;
+    int rtc_month_text;
+    int rtc_hour_pref;
     int last_key;
     gamepad_state_t joystick;
 } retro_gui_t;
@@ -91,7 +96,7 @@ void gui_resize_list(tab_t *tab, int new_size);
 listbox_item_t *gui_get_selected_item(tab_t *tab);
 
 void gui_event(gui_event_t event, tab_t *tab);
-void gui_redraw(void);
+void gui_redraw();
 void gui_draw_navbar(void);
 void gui_draw_header(tab_t *tab);
 void gui_draw_status(tab_t *tab);

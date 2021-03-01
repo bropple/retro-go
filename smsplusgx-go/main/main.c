@@ -19,6 +19,11 @@ static uint16_t palettes[2][32];
 static rg_video_frame_t frames[2];
 static rg_video_frame_t *currentUpdate = &frames[0];
 
+static long refreshRate = 60;
+static long skipFrames = 0;
+
+static bool consoleIsGG = false;
+static bool consoleIsSMS = false;
 static rg_app_desc_t *app;
 
 static gamepad_state_t joystick1;
@@ -152,6 +157,14 @@ void app_main(void)
     system_init2();
     system_reset();
 
+    consoleIsSMS = sms.console == CONSOLE_SMS || sms.console == CONSOLE_SMS2;
+    consoleIsGG  = sms.console == CONSOLE_GG || sms.console == CONSOLE_GGMS;
+    refreshRate = sms.display == DISPLAY_NTSC ? 60 : 50;
+
+    app->refreshRate = refreshRate;
+
+    // if (consoleIsSMS) rg_system_set_app_id(APP_ID + 1);
+    // if (consoleIsGG)  rg_system_set_app_id(APP_ID + 2);
     app->refreshRate = (sms.display == DISPLAY_NTSC) ? 60 : 50;
 
     // if (IS_SMS) rg_system_set_app_id(APP_ID + 1);
@@ -170,7 +183,7 @@ void app_main(void)
 
     long frameTime = get_frame_time(app->refreshRate);
     long skipFrames = 0;
-
+    
     while (true)
     {
         *localJoystick = rg_input_read_gamepad();
