@@ -62,7 +62,7 @@ void rg_settings_init()
         fseek(fp, 0, SEEK_END);
         length = ftell(fp);
         fseek(fp, 0, SEEK_SET);
-        buffer = rg_alloc(length + 1, MEM_ANY);
+        buffer = calloc(1, length + 1);
         fread(buffer, 1, length, fp);
         fclose(fp);
     }
@@ -78,7 +78,7 @@ void rg_settings_init()
     {
         if (nvs_get_str(my_handle, CONFIG_NVS_STORE, NULL, &length) == ESP_OK)
         {
-            buffer = rg_alloc(length + 1, MEM_ANY);
+            buffer = calloc(1, length + 1);
             nvs_get_str(my_handle, CONFIG_NVS_STORE, buffer, &length);
         }
     }
@@ -88,7 +88,7 @@ void rg_settings_init()
     if (buffer)
     {
         root = cJSON_Parse(buffer);
-        rg_free(buffer);
+        free(buffer);
     }
 
     if (root)
