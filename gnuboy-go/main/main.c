@@ -253,6 +253,8 @@ void DS3231_InjectRTC(i2c_dev_t dev){
     //NOTE: The injection WILL NOT WORK if esp-idf
     //isn't patched!
     
+    //Going to move this function and make it a part of rtc_sync();
+    
     struct tm rtcinfo = rg_rtc_getTime(dev);
     
     rtc.d = dayOfYear(rtcinfo.tm_year, rtcinfo.tm_mon + 1, rtcinfo.tm_mday);
@@ -274,7 +276,7 @@ void app_main(void)
         .netplay = &netplay_handler,
     };
 
-    i2c_dev_t dev = rg_system_init(APP_ID, AUDIO_SAMPLE_RATE);
+    rg_system_init(APP_ID, AUDIO_SAMPLE_RATE);
     rg_emu_init(&handlers);
 
     app = rg_system_get_app();
@@ -328,7 +330,7 @@ void app_main(void)
     
     //inject DS3231M RTC value into emulator, if present and enable.
     //if(rg_settings_int32_get("RTCenable", 0) > 0)
-    DS3231_InjectRTC(dev);
+    //DS3231_InjectRTC(dev);
 
     while (true)
     {

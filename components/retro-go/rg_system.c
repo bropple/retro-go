@@ -860,10 +860,8 @@ void rg_free(void *ptr)
 
 i2c_dev_t rg_rtc_init(void)
 {
-    //this will initialize the DS3231M RTC every time the program powers on
-    //OR when an emulator is exited. Will only pop up if there's a problem.
-    //Will show RTC info in an alert window if argument is TRUE.
-    //Will not execute if the hardware RTC is disabled.
+    //this will initialize the DS3231M RTC every time the launcher is started.
+    //Error message only pops up if there's a problem with initializing the RTC.
     
     i2c_dev_t dev;
     
@@ -871,6 +869,7 @@ i2c_dev_t rg_rtc_init(void)
         rg_display_clear(C_RED);
         rg_gui_alert("DS3231M", "RTC init FAIL - Disabling.");
         rg_settings_int32_set("RTCstate", 0);
+        dev.port = 255; //an out-of-range value for an I2C address, so we know it errored
     }
     
     return dev;
