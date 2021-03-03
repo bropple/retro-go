@@ -45,9 +45,6 @@ typedef struct
     char file[256];
 } panic_trace_t;
 
-//I2C descriptor struct for the DS3231M RTC.
-//Will need to be referred to by an extern in other emulators.
-
 // This is a direct pointer to rtc slow ram which isn't cleared on
 // panic. We don't use this region so we can point anywhere in it.
 static panic_trace_t *panicTrace = (void *)0x50001000;

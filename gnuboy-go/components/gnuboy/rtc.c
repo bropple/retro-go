@@ -1,5 +1,3 @@
-#include <rg_system.h>
-#include <rg_ds3231.h>
 #include <sys/time.h>
 #include <stdio.h>
 #include <time.h>
@@ -12,8 +10,6 @@ rtc_t rtc;
 
 // Set in the far future for VBA-M support
 #define RT_BASE 1893456000
-
-#define USE_CONFIG_FILE
 
 void rtc_reset(bool hard)
 {
@@ -28,31 +24,9 @@ void rtc_sync()
 {
 	time_t timer = time(NULL);
 	struct tm *info = localtime(&timer);
+    //use this to sync the HW RTC
     
-    if(rg_settings_int32_get("RTCenable", 0) == 1)
-    {
-        i2c_dev_t dev = rg_rtc_init();
-        if(dev.port != 255)
-        {
-            *info = rg_rtc_getTime(dev);
-            rtc.d = dayOfYear(info->tm_year, info->tm_mon, info->tm_mday);
-        }
-    }
-    
-    /*  Sync idea
-     *  -------------
-     *  When the game is saved, log the actual time and date from the RTC and 
-     *  store it in the JSON file
-     * 
-     *  When the game is reloaded, fetch that data and find the elapsed time
-     *  since then and convert it to the gb format...
-     * 
-     *  Directly injecting the time has inconsistent results, so maybe this will
-     *  help?
-     * 
-     */
-    
-    else rtc.d = info->tm_yday;
+    rtc.d = info->tm_yday;
 	rtc.h = info->tm_hour;
 	rtc.m = info->tm_min;
 	rtc.s = info->tm_sec;

@@ -171,8 +171,8 @@ static dialog_return_t rtc_t_set_cb(dialog_option_t *option, dialog_event_t even
 {
     if(option->id == 'Y') {
         //2000 min, 2090 max
-        if (event == RG_DIALOG_PREV && --RTCtimeBuf.tm_year < 2000) RTCtimeBuf.tm_year = 2090;
-        if (event == RG_DIALOG_NEXT && ++RTCtimeBuf.tm_year > 2090) RTCtimeBuf.tm_year = 2000;
+        if (event == RG_DIALOG_PREV && --RTCtimeBuf.tm_year < 2000) RTCtimeBuf.tm_year = 2100;
+        if (event == RG_DIALOG_NEXT && ++RTCtimeBuf.tm_year > 2100) RTCtimeBuf.tm_year = 2000;
         sprintf(option->value, "%04d", RTCtimeBuf.tm_year);
     }
     if(option->id == 'M') {
@@ -212,6 +212,7 @@ static dialog_return_t rtc_t_set_cb(dialog_option_t *option, dialog_event_t even
     if (option->id == 'C') {
         if(event == RG_DIALOG_ENTER)
         {
+            //DEBUG
             //char message[22];
             //sprintf(message, "%04d %02d %02d %01d %02d:%02d:%02d", RTCtimeBuf.tm_year, RTCtimeBuf.tm_mon, RTCtimeBuf.tm_mday, RTCtimeBuf.tm_wday, RTCtimeBuf.tm_hour, RTCtimeBuf.tm_min, RTCtimeBuf.tm_sec);
             //rg_gui_alert("Time Buffer",  message);
@@ -239,7 +240,7 @@ static dialog_return_t rtc_set_time_cb(dialog_option_t *option, dialog_event_t e
             {'h', "Hour", "00", 1, &rtc_t_set_cb},
             {'m', "Min",  "00", 1, &rtc_t_set_cb},
             {'s', "Sec",  "00", 1, &rtc_t_set_cb},
-            {'C', "Commit Changes", "", 1, &rtc_t_set_cb},
+            {'C', "Save Changes", NULL, 1, &rtc_t_set_cb},
             RG_DIALOG_CHOICE_LAST
         };
         rg_gui_dialog("Set RTC Date & Time", choices, 0);
@@ -254,7 +255,7 @@ static dialog_return_t rtc_state_cb(dialog_option_t *option, dialog_event_t even
             {202, "Date Format    ", "...", gui.rtc_enable, &rtc_format_cb},
             {203, "Month Text     ", "...", gui.rtc_enable, &rtc_month_text_cb},
             {204, "12h or 24h     ", "...", gui.rtc_enable, &rtc_hour_pref_cb},
-            {205, "Set Date & Time", "", gui.rtc_enable, &rtc_set_time_cb},
+            {205, "Set Date & Time", NULL, gui.rtc_enable, &rtc_set_time_cb},
             RG_DIALOG_CHOICE_LAST
         };
         
@@ -268,7 +269,7 @@ static dialog_return_t rtc_master_enable_cb(dialog_option_t *option, dialog_even
     if (event == RG_DIALOG_ENTER) {
         dialog_option_t options[] = {
             {200, "Master Enable     ", "...", 1, &rtc_enable_cb},
-            {201, "Date/Time Settings", "", 1, &rtc_state_cb},
+            {201, "Date/Time Settings", NULL, 1, &rtc_state_cb},
             RG_DIALOG_CHOICE_LAST
         };
         //putting the rest of the settings inside another sub menu so they're greyed out
@@ -414,7 +415,7 @@ void retro_loop(i2c_dev_t dev)
                     {0, "    - Delay", "...",  1, &show_preview_speed_cb},
                     {0, "Startup app", "...",  1, &startup_app_cb},
                     {0, "Disk LED   ", "off",  1, &disk_activity_cb},
-                    {0, "HW RTC Settings", "", 1, &rtc_master_enable_cb},
+                    {0, "HW RTC Settings", NULL, 1, &rtc_master_enable_cb},
                     RG_DIALOG_CHOICE_LAST
                 };
                 rg_gui_settings_menu(options);
