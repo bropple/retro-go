@@ -2,6 +2,7 @@
 #define __RTC_H__
 
 #include <stdio.h>
+#include <rg_system.h>
 
 #include "emu.h"
 
@@ -23,7 +24,7 @@ void rtc_write(byte b);
 void rtc_save(FILE *f);
 void rtc_load(FILE *f);
 void rtc_tick();
-void rtc_reset(bool hard);
+void rtc_reset(bool hard, i2c_dev_t dev);
 void rtc_sync();
 
 #endif

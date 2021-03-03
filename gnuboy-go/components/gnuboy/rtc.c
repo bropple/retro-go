@@ -11,25 +11,38 @@ rtc_t rtc;
 // Set in the far future for VBA-M support
 #define RT_BASE 1893456000
 
-void rtc_reset(bool hard)
+#define SETTING_RTC_ENABLE "RTCenable"
+#define USE_CONFIG_FILE
+
+void rtc_reset(bool hard, i2c_dev_t dev)
 {
 	if (hard)
 	{
 		memset(&rtc, 0, sizeof(rtc));
-		rtc_sync();
+		rtc_sync(dev);
 	}
 }
 
-void rtc_sync()
+void rtc_sync(i2c_dev_t dev)
 {
 	time_t timer = time(NULL);
-	struct tm *info = localtime(&timer);
-    //use this to sync the HW RTC
     
-    rtc.d = info->tm_yday;
-	rtc.h = info->tm_hour;
-	rtc.m = info->tm_min;
-	rtc.s = info->tm_sec;
+    if(rg_settings_int32_get(SETTING_RTC_ENABLE, 0) == 1)
+    {
+        struct tm time = rg_rtc_getTime(dev);
+        rtc.d = dayOfYear(time.tm_year, time.tm_mon, time.tm_mday);
+        rtc.h = time.tm_hour;
+        rtc.m = time.tm_min;
+        rtc.s = time.tm_sec;
+    }
+	else
+    {
+        struct tm *info = localtime(&timer);
+        rtc.d = info->tm_yday;
+        rtc.h = info->tm_hour;
+        rtc.m = info->tm_min;
+        rtc.s = info->tm_sec;
+    }
 
 	MESSAGE_INFO("Clock set to day %03d at %02d:%02d:%02d\n", rtc.d, rtc.h, rtc.m, rtc.s);
 }

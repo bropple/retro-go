@@ -33,6 +33,9 @@ static const char *sramFile;
 static long autoSaveSRAM = 0;
 static long autoSaveSRAM_Timer = 0;
 
+//DS3231M RTC device descriptor struct
+i2c_dev_t dev;
+
 #ifdef ENABLE_NETPLAY
 static bool netplay = false;
 #endif
@@ -83,7 +86,7 @@ static bool load_state_handler(char *pathName)
     {
         // If a state fails to load then we should behave as we do on boot
         // which is a hard reset and load sram if present
-        emu_reset(true);
+        emu_reset(true, dev);
         sram_load(sramFile);
 
         return false;
@@ -93,12 +96,13 @@ static bool load_state_handler(char *pathName)
     autoSaveSRAM_Timer = 0;
 
     // TO DO: Call rtc_sync() if a physical RTC is present
+    rtc_sync(dev);
     return true;
 }
 
 static bool reset_handler(bool hard)
 {
-    emu_reset(hard);
+    emu_reset(hard, dev);
 
     fullFrame = false;
     skipFrames = 20;
@@ -284,7 +288,7 @@ void app_main(void)
         .netplay = &netplay_handler,
     };
 
-    rg_system_init(APP_ID, AUDIO_SAMPLE_RATE);
+    dev = rg_system_init(APP_ID, AUDIO_SAMPLE_RATE);
     rg_emu_init(&handlers);
 
     app = rg_system_get_app();
@@ -325,7 +329,7 @@ void app_main(void)
     pcm.buf = (n16 *)&audioBuffer;
     pcm.pos = 0;
 
-    emu_init();
+    emu_init(dev);
 
     if (app->startAction == EMU_START_ACTION_RESUME)
     {

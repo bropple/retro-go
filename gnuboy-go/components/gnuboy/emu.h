@@ -38,8 +38,8 @@ extern void sys_panic(char *);
 extern void sys_log(int type, const char *format, ...);
 
 /* emu.c */
-void emu_init();
-void emu_reset(bool hard);
+void emu_init(i2c_dev_t dev);
+void emu_reset(bool hard, i2c_dev_t dev);
 void emu_run(bool draw);
 void emu_die(const char *fmt, ...);
 
