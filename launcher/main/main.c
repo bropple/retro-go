@@ -414,7 +414,7 @@ void retro_loop(i2c_dev_t dev)
                     {0, "    - Delay", "...",  1, &show_preview_speed_cb},
                     {0, "Startup app", "...",  1, &startup_app_cb},
                     {0, "Disk LED   ", "off",  1, &disk_activity_cb},
-                    {0, "DS3231M RTC Settings", "", 1, &rtc_master_enable_cb},
+                    {0, "HW RTC Settings", "", 1, &rtc_master_enable_cb},
                     RG_DIALOG_CHOICE_LAST
                 };
                 rg_gui_settings_menu(options);
