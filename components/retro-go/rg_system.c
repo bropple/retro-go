@@ -322,6 +322,7 @@ i2c_dev_t rg_system_init(int appId, int sampleRate)
         dev = rg_rtc_init();
         RG_LOGE("DS3231M is initialized.\n");
     }
+    else dev.port = 254; //disabled
     //rg_rtc_debug(rg_rtc_getTime(dev));
 
     if (esp_reset_reason() == ESP_RST_PANIC)

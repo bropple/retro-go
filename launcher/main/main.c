@@ -23,7 +23,10 @@
 
 #define USE_CONFIG_FILE
 
+//global variables not ideal, but avoids modifying many functions
+//also more acceptable for embedded applications
 struct tm RTCtimeBuf = { 0 }; //time buffer for use in RTC settings
+i2c_dev_t dev;
 
 static dialog_return_t font_size_cb(dialog_option_t *option, dialog_event_t event)
 {
@@ -207,7 +210,19 @@ static dialog_return_t rtc_t_set_cb(dialog_option_t *option, dialog_event_t even
         sprintf(option->value, "%02d", RTCtimeBuf.tm_sec);
     }
     if (option->id == 'C') {
-        //use RTCtimeBuf struct to update RTC time
+        if(event == RG_DIALOG_ENTER)
+        {
+            //char message[22];
+            //sprintf(message, "%04d %02d %02d %01d %02d:%02d:%02d", RTCtimeBuf.tm_year, RTCtimeBuf.tm_mon, RTCtimeBuf.tm_mday, RTCtimeBuf.tm_wday, RTCtimeBuf.tm_hour, RTCtimeBuf.tm_min, RTCtimeBuf.tm_sec);
+            //rg_gui_alert("Time Buffer",  message);
+            
+            //use RTCtimeBuf struct to update RTC time
+            if(dev.port < 254)
+            {
+                ds3231_set_time(&dev, &RTCtimeBuf);
+            }
+            else rg_gui_alert("DS3231M",  "Unable to update RTC time!");
+        }
     }
 
     return event == RG_DIALOG_ENTER;
@@ -460,7 +475,8 @@ void retro_loop(i2c_dev_t dev)
 
 void app_main(void)
 {
-    i2c_dev_t dev = rg_system_init(0, 32000);
+    //i2c_dev_t dev = rg_system_init(0, 32000);
+    dev = rg_system_init(0, 32000);
     rg_display_clear(0);
 
     emulators_init();
