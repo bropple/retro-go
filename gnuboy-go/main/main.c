@@ -19,6 +19,9 @@
 
 #define SETTING_SAVE_SRAM "sram"
 
+#define SETTING_RTC_ENABLE "RTCenable"
+#define USE_CONFIG_FILE
+
 static short audioBuffer[AUDIO_BUFFER_LENGTH * 2];
 
 static rg_video_frame_t frames[2];
@@ -220,7 +223,7 @@ static dialog_return_t advanced_settings_cb(dialog_option_t *option, dialog_even
 {
     if (event == RG_DIALOG_ENTER) {
         dialog_option_t options[] = {
-            {101, "Set clock", "00:00", 1, &rtc_update_cb},
+            {101, "Set clock", "00:00", !(rg_settings_int32_get(SETTING_RTC_ENABLE, 0)), &rtc_update_cb},
             RG_DIALOG_SEPARATOR,
             {111, "Auto save SRAM", "Off", mbc.batt && mbc.ramsize, &sram_autosave_cb},
             {112, "Save SRAM now ", NULL, mbc.batt && mbc.ramsize, &sram_save_now_cb},
