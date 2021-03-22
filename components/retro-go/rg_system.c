@@ -35,19 +35,26 @@
 #define INPUT_TIMEOUT 5000000
 #endif
 
-#define USE_CONFIG_FILE
+static const char *SETTING_RTC_ENABLE = "RTCenable";
+
+typedef struct
+{
+    uint32_t magicWord;
+    char output[2048];
+    size_t cursor;
+} panic_console_t;
 
 typedef struct
 {
     uint32_t magicWord;
     char message[256];
-    char function[64];
-    char file[256];
+    char context[128];
+    char appname[128];
 } panic_trace_t;
 
-// This is a direct pointer to rtc slow ram which isn't cleared on
-// panic. We don't use this region so we can point anywhere in it.
-static panic_trace_t *panicTrace = (void *)0x50001000;
+// These will survive a software reset
+static RTC_NOINIT_ATTR panic_trace_t panicTrace;
+static RTC_NOINIT_ATTR panic_console_t panicConsole;
 
 static rg_app_desc_t currentApp;
 static runtime_stats_t statistics;
@@ -60,6 +67,21 @@ static SemaphoreHandle_t spiMutex;
 static spi_lock_res_t spiMutexOwner;
 #endif
 
+
+IRAM_ATTR void esp_panic_putchar_hook(char c)
+{
+    if (panicConsole.magicWord != PANIC_TRACE_MAGIC)
+    {
+        panicConsole.magicWord = PANIC_TRACE_MAGIC;
+        panicConsole.cursor = 0;
+    }
+
+    if (panicConsole.cursor < sizeof(panicConsole.output) - 1)
+    {
+        panicConsole.output[panicConsole.cursor++] = c;
+        panicConsole.output[panicConsole.cursor] = 0;
+    }
+}
 
 static void system_monitor_task(void *arg)
 {
@@ -206,7 +228,7 @@ esp_err_t sdcard_do_transaction(int slot, sdmmc_command_t *cmdinfo)
     return ret;
 }
 
-bool rg_sdcard_mount()
+bool rg_sdcard_init(void)
 {
     sdmmc_host_t host_config = SDSPI_HOST_DEFAULT();
     host_config.slot = HSPI_HOST;
@@ -240,7 +262,7 @@ bool rg_sdcard_mount()
     return false;
 }
 
-bool rg_sdcard_unmount()
+bool rg_sdcard_deinit(void)
 {
     esp_err_t ret = esp_vfs_fat_sdmmc_unmount();
     if (ret == ESP_OK)
@@ -260,23 +282,6 @@ void rg_system_time_init()
 void rg_system_time_save()
 {
     // Update external RTC or save timestamp to disk
-}
-
-void rg_system_gpio_init()
-{
-    // Blue LED
-    gpio_set_direction(RG_GPIO_LED, GPIO_MODE_OUTPUT);
-    gpio_set_level(RG_GPIO_LED, 0);
-
-    // Disable LCD CD to prevent garbage
-    gpio_set_direction(RG_GPIO_LCD_CS, GPIO_MODE_OUTPUT);
-    gpio_set_level(RG_GPIO_LCD_CS, 1);
-
-    // Disable speaker to prevent hiss/pops
-    gpio_set_direction(RG_GPIO_DAC1, GPIO_MODE_INPUT);
-    gpio_set_direction(RG_GPIO_DAC2, GPIO_MODE_INPUT);
-    gpio_set_level(RG_GPIO_DAC1, 0);
-    gpio_set_level(RG_GPIO_DAC2, 0);
 }
 
 i2c_dev_t rg_system_init(int appId, int sampleRate)
@@ -300,21 +305,23 @@ i2c_dev_t rg_system_init(int appId, int sampleRate)
     currentApp.refreshRate = 1;
     currentApp.mainTaskHandle = xTaskGetCurrentTaskHandle();
 
-    // sdcard init must be before rg_display_init()
-    // and rg_settings_init() if JSON is used
-    bool sd_init = rg_sdcard_mount();
+    // Blue LED
+    gpio_set_direction(RG_GPIO_LED, GPIO_MODE_OUTPUT);
+    gpio_set_level(RG_GPIO_LED, 0);
 
-    rg_system_gpio_init();
+    // This must be before rg_display_init() and rg_settings_init()
+    bool sd_init = rg_sdcard_init();
     rg_settings_init();
-    rg_gui_init();
-    rg_input_init();
-    rg_audio_init(sampleRate);
     rg_display_init();
+    rg_gui_init();
+    rg_gui_draw_hourglass();
+    rg_audio_init(sampleRate);
+    rg_input_init();
     rg_system_time_init();
     
     //Start up external RTC - must be enabled first.
     i2c_dev_t dev;
-    if(rg_settings_int32_get("RTCenable", 0) == 1)
+    if(rg_settings_get_int32(SETTING_RTC_ENABLE, 0) == 1)
     {
         dev = rg_rtc_init();
         RG_LOGE("DS3231M is initialized.\n");
@@ -324,28 +331,52 @@ i2c_dev_t rg_system_init(int appId, int sampleRate)
 
     if (esp_reset_reason() == ESP_RST_PANIC)
     {
-        if (panicTrace->magicWord == PANIC_TRACE_MAGIC)
-            RG_LOGX(" *** PREVIOUS PANIC: %s *** \n", panicTrace->message);
-        else  // Presumably abort()
-            strcpy(panicTrace->message, "Application crashed");
-        panicTrace->magicWord = 0;
-        rg_audio_deinit();
+        char message[400] = "Application crashed";
+
+        if (panicTrace.magicWord == PANIC_TRACE_MAGIC)
+        {
+            RG_LOGX(" *** PANIC TRACE: %s (%s) *** \n", panicTrace.message, panicTrace.context);
+            strcpy(message, panicTrace.message);
+        }
+
+        if (panicConsole.magicWord == PANIC_TRACE_MAGIC)
+        {
+            RG_LOGI("Panic log found, saving to sdcard...\n");
+            FILE *fp = fopen(RG_BASE_PATH "/crash.log", "w");
+            if (fp)
+            {
+                fprintf(fp, "Application: %s %s\n", app->project_name, app->version);
+                fprintf(fp, "Build date: %s %s\n", app->date, app->time);
+                if (panicTrace.magicWord == PANIC_TRACE_MAGIC)
+                {
+                    fprintf(fp, "Message: %.256s\n", panicTrace.message);
+                    fprintf(fp, "Context: %.256s\n", panicTrace.context);
+                }
+                fputs("\nConsole:\n", fp);
+                fputs(panicConsole.output, fp);
+                fputs("\n\nEnd of log\n", fp);
+                fclose(fp);
+                strcat(message, "\n Log saved to SD Card.");
+            }
+        }
+
         rg_display_clear(C_BLUE);
-        rg_gui_set_font_size(12);
-        rg_gui_alert("System Panic!", panicTrace->message);
+        // rg_gui_set_font_size(12);
+        rg_gui_alert("System Panic!", message);
+        rg_sdcard_deinit();
+        rg_audio_deinit();
         rg_system_switch_app(RG_APP_LAUNCHER);
     }
-
-    if (esp_reset_reason() != ESP_RST_SW)
+    else
     {
-        rg_display_clear(0);
-        rg_gui_draw_hourglass();
+        panicConsole.magicWord = 0;
+        panicTrace.magicWord = 0;
     }
 
     if (!sd_init)
     {
         rg_display_clear(C_SKY_BLUE);
-        rg_gui_set_font_size(12);
+        // rg_gui_set_font_size(12);
         rg_gui_alert("SD Card Error", "Mount failed."); // esp_err_to_name(ret)
         rg_system_switch_app(RG_APP_LAUNCHER);
     }
@@ -361,6 +392,8 @@ i2c_dev_t rg_system_init(int appId, int sampleRate)
         // Only boot this app once, next time will return to launcher
         if (rg_settings_StartupApp_get() == 0)
         {
+            // This might interfer with our panic capture above and, at the very least, make
+            // it report wrong app/version...
             rg_system_set_boot_app(RG_APP_LAUNCHER);
         }
     }
@@ -372,7 +405,6 @@ i2c_dev_t rg_system_init(int appId, int sampleRate)
 
     xTaskCreate(&system_monitor_task, "sysmon", 2048, NULL, 7, NULL);
 
-    panicTrace->magicWord = 0;
     initialized = true;
 
     RG_LOGI("Retro-Go init done.\n");
@@ -382,9 +414,9 @@ i2c_dev_t rg_system_init(int appId, int sampleRate)
 void rg_emu_init(const rg_emu_proc_t *handlers)
 {
     currentApp.startAction = rg_settings_StartAction_get();
+    currentApp.romPath = rg_settings_RomFilePath_get();
     currentApp.refreshRate = 60;
 
-    currentApp.romPath = rg_settings_RomFilePath_get();
     if (!currentApp.romPath || strlen(currentApp.romPath) < 4)
     {
         RG_PANIC("Invalid ROM path!");
@@ -413,7 +445,7 @@ rg_app_desc_t *rg_system_get_app()
     return &currentApp;
 }
 
-char* rg_emu_get_path(emu_path_type_t type, const char *_romPath)
+char *rg_emu_get_path(emu_path_type_t type, const char *_romPath)
 {
     const char *fileName = _romPath ?: currentApp.romPath;
     char buffer[256];
@@ -465,12 +497,6 @@ char* rg_emu_get_path(emu_path_type_t type, const char *_romPath)
         case EMU_PATH_ROM_FILE:
             strcpy(buffer, RG_BASE_PATH_ROMS);
             strcat(buffer, fileName);
-            break;
-
-        case EMU_PATH_CRC_CACHE:
-            strcpy(buffer, RG_BASE_PATH_CRC_CACHE);
-            strcat(buffer, fileName);
-            strcat(buffer, ".crc");
             break;
 
         default:
@@ -581,6 +607,18 @@ bool rg_emu_notify(int msg, void *arg)
     return false;
 }
 
+bool rg_emu_start_game(const char *emulator, const char *romPath, emu_start_action_t action)
+{
+    rg_settings_RomFilePath_set(romPath);
+    rg_settings_StartAction_set(action);
+    rg_settings_save();
+
+    if (emulator)
+        rg_system_switch_app(emulator);
+    else
+        esp_restart();
+}
+
 void rg_system_restart()
 {
     // FIX ME: Ensure the boot loader points to us
@@ -591,13 +629,15 @@ void rg_system_switch_app(const char *app)
 {
     RG_LOGI("Switching to app '%s'.\n", app ? app : "NULL");
 
-    rg_display_clear(0);
+    rg_display_clear(C_BLACK);
     rg_gui_draw_hourglass();
 
-    rg_audio_deinit();
-    rg_sdcard_unmount();
-
     rg_system_set_boot_app(app);
+
+    rg_audio_deinit();
+    rg_sdcard_deinit();
+    // rg_display_deinit();
+
     esp_restart();
 }
 
@@ -625,15 +665,14 @@ void rg_system_set_boot_app(const char *app)
     RG_LOGI("Boot partition set to %d '%s'\n", partition->subtype, partition->label);
 }
 
-void rg_system_panic(const char *reason, const char *function, const char *file)
+void rg_system_panic(const char *message, const char *context)
 {
-    RG_LOGX("*** PANIC: %s\n  *** FUNCTION: %s\n  *** FILE: %s\n", reason, function, file);
+    strcpy(panicTrace.message, message ? message : "");
+    strcpy(panicTrace.context, context ? context : "");
+    panicTrace.magicWord = PANIC_TRACE_MAGIC;
 
-    strcpy(panicTrace->message, reason);
-    strcpy(panicTrace->file, file);
-    strcpy(panicTrace->function, function);
-
-    panicTrace->magicWord = PANIC_TRACE_MAGIC;
+    RG_LOGX("*** PANIC  : %s\n", panicTrace.message);
+    RG_LOGX("*** CONTEXT: %s\n", panicTrace.context);
 
     abort();
 }
@@ -735,14 +774,11 @@ bool rg_fs_mkdir(const char *dir)
     return (ret == 0);
 }
 
-bool rg_fs_readdir(const char* path, char **out_files, size_t *out_count)
+bool rg_fs_readdir(const char* path, char **out_files, size_t *out_count, bool skip_hidden)
 {
     DIR* dir = opendir(path);
     if (!dir)
-    {
-        rg_spi_lock_release(SPI_LOCK_SDCARD);
         return false;
-    }
 
     // TO DO: We should use a struct instead of a packed list of strings
     char *buffer = NULL;
@@ -753,18 +789,22 @@ bool rg_fs_readdir(const char* path, char **out_files, size_t *out_count)
 
     while ((file = readdir(dir)))
     {
-        size_t len = strlen(file->d_name) + 1;
+        const char *name = file->d_name;
+        size_t name_len = strlen(name) + 1;
 
-        if (len < 2) continue;
+        if (name_len < 2 || (skip_hidden && name[0] == '.'))
+        {
+            continue;
+        }
 
-        if ((bufsize - bufpos) < len)
+        if ((bufsize - bufpos) < name_len)
         {
             bufsize += 1024;
             buffer = realloc(buffer, bufsize);
         }
 
-        memcpy(buffer + bufpos, &file->d_name, len);
-        bufpos += len;
+        memcpy(buffer + bufpos, name, name_len);
+        bufpos += name_len;
         count++;
     }
 

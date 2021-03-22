@@ -17,12 +17,8 @@
 ** must bear this legend.
 **
 **
-** map041.c
-**
-** Mapper #41 (Caltron 6 in 1)
-** Implementation by Firebug
-** Mapper information courtesy of Kevin Horton
-** $Id: map041.c,v 1.2 2001/04/27 14:37:11 neil Exp $
+** map041.c: Mapper #41 (Caltron 6 in 1)
+** Implemented by Firebug with information courtesy of Kevin Horton
 **
 */
 
@@ -36,73 +32,63 @@ static uint8 register_high;
 /*****************************************************/
 /* Set 8K CHR bank from the combined register values */
 /*****************************************************/
-static void map41_set_chr (void)
+static void map41_set_chr(void)
 {
   /* Set the CHR bank from the appropriate register bits */
-  mmc_bankvrom (8, 0x0000, ((register_low >> 1) & 0x0C) | (register_high));
-
-  /* Done */
-  return;
+  mmc_bankvrom(8, 0x0000, ((register_low >> 1) & 0x0C) | (register_high));
 }
 
 /******************************/
 /* Mapper #41: Caltron 6 in 1 */
 /******************************/
-static void map41_init (void)
+static void map41_init(rom_t *cart)
 {
-  /* Both registers set to zero at power on */
-  /* TODO: Registers should also be cleared on a soft reset */
-  register_low = 0x00;
-  register_high = 0x00;
-  mmc_bankrom (32, 0x8000, 0x00);
-  map41_set_chr ();
+   UNUSED(cart);
 
-  /* Done */
-  return;
+   /* Both registers set to zero at power on */
+   /* TODO: Registers should also be cleared on a soft reset */
+   register_low = 0x00;
+   register_high = 0x00;
+   mmc_bankrom(32, 0x8000, 0x00);
+   map41_set_chr();
 }
 
 /******************************************/
 /* Mapper #41 write handler ($6000-$67FF) */
 /******************************************/
-static void map41_low_write (uint32 address, uint8 value)
+static void map41_low_write(uint32 address, uint8 value)
 {
-  /* Within this range the value written is irrelevant */
-  UNUSED (value);
+   /* Within this range the value written is irrelevant */
+   UNUSED(value);
 
-  /* $6000-$67FF: A5    = mirroring (1=horizontal, 0=vertical)      */
-  /*              A4-A3 = high two bits of 8K CHR bank              */
-  /*              A2    = register 1 enable (0=disabled, 1=enabled) */
-  /*              A2-A0 = 32K PRG bank                              */
-  register_low = (uint8) (address & 0x3F);
-  mmc_bankrom (32, 0x8000, register_low & 0x07);
-  map41_set_chr ();
-  if (register_low & 0x20) ppu_setmirroring(PPU_MIRROR_HORI);
-  else                     ppu_setmirroring(PPU_MIRROR_VERT);
-
-  /* Done */
-  return;
+   /* $6000-$67FF: A5    = mirroring (1=horizontal, 0=vertical)      */
+   /*              A4-A3 = high two bits of 8K CHR bank              */
+   /*              A2    = register 1 enable (0=disabled, 1=enabled) */
+   /*              A2-A0 = 32K PRG bank                              */
+   register_low = (uint8) (address & 0x3F);
+   mmc_bankrom(32, 0x8000, register_low & 0x07);
+   map41_set_chr();
+   if (register_low & 0x20) ppu_setmirroring(PPU_MIRROR_HORI);
+   else                     ppu_setmirroring(PPU_MIRROR_VERT);
 }
 
 /******************************************/
 /* Mapper #41 write handler ($8000-$FFFF) */
 /******************************************/
-static void map41_high_write (uint32 address, uint8 value)
+static void map41_high_write(uint32 address, uint8 value)
 {
-  /* Address doesn't matter within this range */
-  UNUSED (address);
+   /* Address doesn't matter within this range */
+   UNUSED(address);
 
-  /* $8000-$FFFF: D1-D0 = low two bits of 8K CHR bank */
-  if (register_low & 0x04)
-  {
-    register_high = value & 0x03;
-    map41_set_chr ();
-  }
-
-  /* Done */
-  return;
+   /* $8000-$FFFF: D1-D0 = low two bits of 8K CHR bank */
+   if (register_low & 0x04)
+   {
+      register_high = value & 0x03;
+      map41_set_chr();
+   }
 }
 
-static mem_write_handler_t map41_memwrite [] =
+static const mem_write_handler_t map41_memwrite[] =
 {
    { 0x6000, 0x67FF, map41_low_write },
    { 0x8000, 0xFFFF, map41_high_write },
@@ -111,31 +97,14 @@ static mem_write_handler_t map41_memwrite [] =
 
 mapintf_t map41_intf =
 {
-   41,                               /* Mapper number */
-   "Caltron 6 in 1",                 /* Mapper name */
-   map41_init,                       /* Initialization routine */
-   NULL,                             /* VBlank callback */
-   NULL,                             /* HBlank callback */
-   NULL,                             /* Get state (SNSS) */
-   NULL,                             /* Set state (SNSS) */
-   NULL,                             /* Memory read structure */
-   map41_memwrite,                   /* Memory write structure */
-   NULL                              /* External sound device */
+   41,               /* Mapper number */
+   "Caltron 6 in 1", /* Mapper name */
+   map41_init,       /* Initialization routine */
+   NULL,             /* VBlank callback */
+   NULL,             /* HBlank callback */
+   NULL,             /* Get state (SNSS) */
+   NULL,             /* Set state (SNSS) */
+   NULL,             /* Memory read structure */
+   map41_memwrite,   /* Memory write structure */
+   NULL              /* External sound device */
 };
-
-/*
-** $Log: map041.c,v $
-** Revision 1.2  2001/04/27 14:37:11  neil
-** wheeee
-**
-** Revision 1.1  2001/04/27 12:54:40  neil
-** blah
-**
-** Revision 1.1  2001/04/27 10:57:41  neil
-** wheee
-**
-** Revision 1.1  2000/12/30 00:33:15  firebug
-** initial revision
-**
-**
-*/

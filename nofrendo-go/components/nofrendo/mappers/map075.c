@@ -17,20 +17,17 @@
 ** must bear this legend.
 **
 **
-** map75.c
+** map075.c: Konami VRC1 mapper interface
 **
-** mapper 75 interface
-** $Id: map075.c,v 1.2 2001/04/27 14:37:11 neil Exp $
 */
 
 #include <nofrendo.h>
 #include <mmc.h>
 
-
 static uint8 latch[2];
 static uint8 hibits;
 
-/* mapper 75: Konami VRC1 */
+
 static void map75_write(uint32 address, uint8 value)
 {
    switch ((address & 0xF000) >> 12)
@@ -75,7 +72,7 @@ static void map75_write(uint32 address, uint8 value)
    }
 }
 
-static mem_write_handler_t map75_memwrite[] =
+static const mem_write_handler_t map75_memwrite[] =
 {
    { 0x8000, 0xFFFF, map75_write },
    LAST_MEMORY_HANDLER
@@ -83,48 +80,14 @@ static mem_write_handler_t map75_memwrite[] =
 
 mapintf_t map75_intf =
 {
-   75, /* mapper number */
-   "Konami VRC1", /* mapper name */
-   NULL, /* init routine */
-   NULL, /* vblank callback */
-   NULL, /* hblank callback */
-   NULL, /* get state (snss) */
-   NULL, /* set state (snss) */
-   NULL, /* memory read structure */
-   map75_memwrite, /* memory write structure */
-   NULL /* external sound device */
+   75,               /* mapper number */
+   "Konami VRC1",    /* mapper name */
+   NULL,             /* init routine */
+   NULL,             /* vblank callback */
+   NULL,             /* hblank callback */
+   NULL,             /* get state (snss) */
+   NULL,             /* set state (snss) */
+   NULL,             /* memory read structure */
+   map75_memwrite,   /* memory write structure */
+   NULL              /* external sound device */
 };
-
-/*
-** $Log: map075.c,v $
-** Revision 1.2  2001/04/27 14:37:11  neil
-** wheeee
-**
-** Revision 1.1  2001/04/27 12:54:40  neil
-** blah
-**
-** Revision 1.1.1.1  2001/04/27 07:03:54  neil
-** initial
-**
-** Revision 1.1  2000/10/24 12:19:33  matt
-** changed directory structure
-**
-** Revision 1.6  2000/10/22 19:17:46  matt
-** mapper cleanups galore
-**
-** Revision 1.5  2000/10/22 15:03:14  matt
-** simplified mirroring
-**
-** Revision 1.4  2000/10/21 19:33:38  matt
-** many more cleanups
-**
-** Revision 1.3  2000/07/10 05:29:03  matt
-** cleaned up some mirroring issues
-**
-** Revision 1.2  2000/07/06 02:48:43  matt
-** clearly labelled structure members
-**
-** Revision 1.1  2000/07/06 01:01:56  matt
-** initial revision
-**
-*/

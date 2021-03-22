@@ -17,10 +17,7 @@
 #define AUDIO_SAMPLE_RATE   (32000)
 #define AUDIO_BUFFER_LENGTH (AUDIO_SAMPLE_RATE / 16 + 1)
 
-#define SETTING_SAVE_SRAM "sram"
-
-#define SETTING_RTC_ENABLE "RTCenable"
-#define USE_CONFIG_FILE
+static const char *SETTING_RTC_ENABLE = "RTCenable";
 
 static short audioBuffer[AUDIO_BUFFER_LENGTH * 2];
 
@@ -42,6 +39,9 @@ i2c_dev_t dev;
 #ifdef ENABLE_NETPLAY
 static bool netplay = false;
 #endif
+
+static const char *SETTING_SAVESRAM = "SaveSRAM";
+static const char *SETTING_PALETTE  = "Palette";
 // --- MAIN
 
 static void netplay_handler(netplay_event_t event, void *arg)
@@ -127,7 +127,7 @@ static dialog_return_t palette_update_cb(dialog_option_t *option, dialog_event_t
 
     if (event == RG_DIALOG_PREV || event == RG_DIALOG_NEXT)
     {
-        rg_settings_Palette_set(pal);
+        rg_settings_set_app_int32(SETTING_PALETTE, pal);
         pal_set_dmg(pal);
         emu_run(true);
     }
@@ -166,7 +166,7 @@ static dialog_return_t sram_autosave_cb(dialog_option_t *option, dialog_event_t 
 
     if (event == RG_DIALOG_PREV || event == RG_DIALOG_NEXT)
     {
-        rg_settings_app_int32_set(SETTING_SAVE_SRAM, autoSaveSRAM);
+        rg_settings_set_app_int32(SETTING_SAVESRAM, autoSaveSRAM);
     }
 
     if (autoSaveSRAM == 0) strcpy(option->value, "Off ");
@@ -223,7 +223,7 @@ static dialog_return_t advanced_settings_cb(dialog_option_t *option, dialog_even
 {
     if (event == RG_DIALOG_ENTER) {
         dialog_option_t options[] = {
-            {101, "Set clock", "00:00", !(rg_settings_int32_get(SETTING_RTC_ENABLE, 0)), &rtc_update_cb},
+            {101, "Set clock", "00:00", !(rg_settings_get_int32(SETTING_RTC_ENABLE, 0)), &rtc_update_cb},
             RG_DIALOG_SEPARATOR,
             {111, "Auto save SRAM", "Off", mbc.batt && mbc.ramsize, &sram_autosave_cb},
             {112, "Save SRAM now ", NULL, mbc.batt && mbc.ramsize, &sram_save_now_cb},
@@ -238,7 +238,7 @@ static void screen_blit(void)
 {
     rg_video_frame_t *previousUpdate = &frames[currentUpdate == &frames[0]];
 
-    fullFrame = rg_display_queue_update(currentUpdate, previousUpdate) == RG_SCREEN_UPDATE_FULL;
+    fullFrame = rg_display_queue_update(currentUpdate, previousUpdate) == RG_UPDATE_FULL;
 
     // swap buffers
     currentUpdate = previousUpdate;
@@ -305,14 +305,14 @@ void app_main(void)
     frames[0].buffer = rg_alloc(GB_WIDTH * GB_HEIGHT * 2, MEM_ANY);
     frames[1].buffer = rg_alloc(GB_WIDTH * GB_HEIGHT * 2, MEM_ANY);
 
-    autoSaveSRAM = rg_settings_app_int32_get(SETTING_SAVE_SRAM, 0);
+    autoSaveSRAM = rg_settings_get_app_int32(SETTING_SAVESRAM, 0);
     sramFile = rg_emu_get_path(EMU_PATH_SAVE_SRAM, 0);
 
     // Load ROM
     rom_load(app->romPath);
 
     // Set palette for non-gbc games (must be after rom_load)
-    pal_set_dmg(rg_settings_Palette_get());
+    pal_set_dmg(rg_settings_get_app_int32(SETTING_PALETTE, 0));
 
     // Video
     memset(&fb, 0, sizeof(fb));
@@ -342,20 +342,16 @@ void app_main(void)
     {
         sram_load(sramFile);
     }
-    
-    //inject DS3231M RTC value into emulator, if present and enable.
-    //if(rg_settings_int32_get("RTCenable", 0) > 0)
-    //DS3231_InjectRTC(dev);
 
     while (true)
     {
-        gamepad_state_t joystick = rg_input_read_gamepad();
+        uint32_t joystick = rg_input_read_gamepad();
 
-        if (joystick.values[GAMEPAD_KEY_MENU]) {
+        if (joystick & GAMEPAD_KEY_MENU) {
             auto_sram_update();
             rg_gui_game_menu();
         }
-        else if (joystick.values[GAMEPAD_KEY_VOLUME]) {
+        else if (joystick & GAMEPAD_KEY_VOLUME) {
             dialog_option_t options[] = {
                 {100, "Palette", "7/7", !hw.cgb, &palette_update_cb},
                 {101, "More...", NULL, 1, &advanced_settings_cb},
@@ -368,14 +364,14 @@ void app_main(void)
         int64_t startTime = get_elapsed_time();
         bool drawFrame = !skipFrames;
 
-        pad_set(PAD_UP, joystick.values[GAMEPAD_KEY_UP]);
-        pad_set(PAD_RIGHT, joystick.values[GAMEPAD_KEY_RIGHT]);
-        pad_set(PAD_DOWN, joystick.values[GAMEPAD_KEY_DOWN]);
-        pad_set(PAD_LEFT, joystick.values[GAMEPAD_KEY_LEFT]);
-        pad_set(PAD_SELECT, joystick.values[GAMEPAD_KEY_SELECT]);
-        pad_set(PAD_START, joystick.values[GAMEPAD_KEY_START]);
-        pad_set(PAD_A, joystick.values[GAMEPAD_KEY_A]);
-        pad_set(PAD_B, joystick.values[GAMEPAD_KEY_B]);
+        pad_set(PAD_UP, joystick & GAMEPAD_KEY_UP);
+        pad_set(PAD_RIGHT, joystick & GAMEPAD_KEY_RIGHT);
+        pad_set(PAD_DOWN, joystick & GAMEPAD_KEY_DOWN);
+        pad_set(PAD_LEFT, joystick & GAMEPAD_KEY_LEFT);
+        pad_set(PAD_SELECT, joystick & GAMEPAD_KEY_SELECT);
+        pad_set(PAD_START, joystick & GAMEPAD_KEY_START);
+        pad_set(PAD_A, joystick & GAMEPAD_KEY_A);
+        pad_set(PAD_B, joystick & GAMEPAD_KEY_B);
 
         emu_run(drawFrame);
 

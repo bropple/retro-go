@@ -17,10 +17,8 @@
 ** must bear this legend.
 **
 **
-** map4.c
+** map004.c: MMC3 mapper interface
 **
-** mapper 4 interface
-** $Id: map004.c,v 1.2 2001/04/27 14:37:11 neil Exp $
 */
 
 #include <nofrendo.h>
@@ -36,6 +34,7 @@ static struct
 static uint8 reg;
 static uint8 reg8000;
 static uint16 vrombase;
+static bool fourscreen;
 
 // Shouldn't that be packed? (It wasn't packed in SNSS...)
 typedef struct
@@ -46,7 +45,7 @@ typedef struct
    unsigned char last8000Write;
 } mapper4Data;
 
-/* mapper 4: MMC3 */
+
 static void map4_write(uint32 address, uint8 value)
 {
    switch (address & 0xE001)
@@ -100,7 +99,7 @@ static void map4_write(uint32 address, uint8 value)
 
    case 0xA000:
       /* four screen mirroring crap */
-      if (0 == (mmc_getinfo()->flags & ROM_FLAG_FOURSCREEN))
+      if (fourscreen == false)
       {
          if (value & 1)
             ppu_setmirroring(PPU_MIRROR_HORI);
@@ -172,14 +171,15 @@ static void map4_setstate(void *state)
    map4_write(0x8000, ((mapper4Data*)state)->last8000Write);
 }
 
-static void map4_init(void)
+static void map4_init(rom_t *cart)
 {
    irq.counter = irq.latch = 0;
    irq.enabled = false;
    reg = reg8000 = vrombase = 0;
+   fourscreen = cart->flags & ROM_FLAG_FOURSCREEN;
 }
 
-static mem_write_handler_t map4_memwrite[] =
+static const mem_write_handler_t map4_memwrite[] =
 {
    { 0x8000, 0xFFFF, map4_write },
    LAST_MEMORY_HANDLER
@@ -187,14 +187,14 @@ static mem_write_handler_t map4_memwrite[] =
 
 mapintf_t map4_intf =
 {
-   4, /* mapper number */
-   "MMC3", /* mapper name */
-   map4_init, /* init routine */
-   NULL, /* vblank callback */
-   map4_hblank, /* hblank callback */
-   map4_getstate, /* get state (snss) */
-   map4_setstate, /* set state (snss) */
-   NULL, /* memory read structure */
-   map4_memwrite, /* memory write structure */
-   NULL /* external sound device */
+   4,                /* mapper number */
+   "MMC3",           /* mapper name */
+   map4_init,        /* init routine */
+   NULL,             /* vblank callback */
+   map4_hblank,      /* hblank callback */
+   map4_getstate,    /* get state (snss) */
+   map4_setstate,    /* set state (snss) */
+   NULL,             /* memory read structure */
+   map4_memwrite,    /* memory write structure */
+   NULL              /* external sound device */
 };

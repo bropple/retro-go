@@ -17,10 +17,8 @@
 ** must bear this legend.
 **
 **
-** osd.h
+** osd.h: O/S dependent routine defintions (must be implemented)
 **
-** O/S dependent routine defintions (must be customized)
-** $Id: osd.h,v 1.2 2001/04/27 14:37:11 neil Exp $
 */
 
 #ifndef _OSD_H_
@@ -41,10 +39,6 @@ extern void osd_vsync(void);
 
 /* input */
 extern void osd_getinput(void);
-
-/* get rom data */
-extern uint32_t osd_getromsize(void);
-extern uint8_t *osd_getromdata(void);
 
 /* Log output, printf-style format */
 extern void osd_log(int type, const char *format, ...);

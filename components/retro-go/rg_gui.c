@@ -8,7 +8,7 @@
 #include <lupng.h>
 
 #include "bitmaps/image_hourglass.h"
-#include "bitmaps/font_basic.h"
+#include "fonts/fonts.h"
 #include "rg_system.h"
 #include "rg_gui.h"
 
@@ -23,18 +23,15 @@ static const dialog_theme_t default_theme = {
 };
 
 static dialog_theme_t theme;
-static font_info_t font_info;
+static font_info_t font_info = {0, 8, 8, 8, &font_basic8x8};
 
-static const char *SETTING_FONTSIZE     = "FontSize";
-// static const char *SETTING_FONTTYPE     = "FontType";
-
-#define wait_all_keys_released() while (rg_input_key_is_pressed(GAMEPAD_KEY_ANY))
-
+// static const char *SETTING_FONTSIZE     = "FontSize";
+static const char *SETTING_FONTTYPE     = "FontType";
 
 void rg_gui_init(void)
 {
     overlay_buffer = (uint16_t *)rg_alloc(RG_SCREEN_WIDTH * 32 * 2, MEM_SLOW);
-    rg_gui_set_font_size(rg_settings_int32_get(SETTING_FONTSIZE, 8));
+    rg_gui_set_font_type(rg_settings_get_int32(SETTING_FONTTYPE, 0));
     rg_gui_set_theme(&default_theme);
 }
 
@@ -45,12 +42,92 @@ void rg_gui_set_theme(const dialog_theme_t *new_theme)
     }
 }
 
-void rg_gui_set_font_size(int points)
+static rg_glyph_t get_glyph(const rg_font_t *font, int points, int c)
 {
-    font_info.points = RG_MAX(8, RG_MIN(32, points));
+    rg_glyph_t out = {
+        .width  = font->width ? font->width : 8,
+        .height = font->height,
+        .bitmap = {0},
+    };
+
+    if (font->type == 0) // bitmap
+    {
+        if (c < font->chars)
+        {
+            for (int y = 0; y < font->height; y++) {
+                out.bitmap[y] = font->data[(c * font->height) + y];
+            }
+        }
+    }
+    else // Proportional
+    {
+        // Based on code by Boris Lovosevic (https://github.com/loboris)
+        int charCode, adjYOffset, width, height, xOffset, xDelta;
+        const uint8_t *data = font->data;
+        do {
+            charCode = *data++;
+            adjYOffset = *data++;
+            width = *data++;
+            height = *data++;
+            xOffset = *data++;
+            xOffset = xOffset < 0x80 ? xOffset : -(0xFF - xOffset);
+            xDelta = *data++;
+
+            if (c != charCode && charCode != 0xFF && width != 0) {
+                data += (((width * height) - 1) / 8) + 1;
+            }
+        } while ((c != charCode) && (charCode != 0xFF));
+
+        if (c == charCode)
+        {
+            out.width = ((width > xDelta) ? width : xDelta);
+            // out.height = height;
+
+            int ch = 0, mask = 0x80;
+
+            for (int y = 0; y < height; y++) {
+                for (int x = 0; x < width; x++) {
+                    if (((x + (y * width)) % 8) == 0) {
+                        mask = 0x80;
+                        ch = *data++;
+                    }
+                    if ((ch & mask) != 0) {
+                        out.bitmap[adjYOffset + y] |= (1 << (xOffset + x));
+                    }
+                    mask >>= 1;
+                }
+            }
+        }
+    }
+
+    if (points && points != font->height)
+    {
+        float scale = (float)points / font->height;
+        rg_glyph_t out2 = out;
+        out.height = points;
+        for (int y = 0; y < out.height; y++)
+            out.bitmap[y] = out2.bitmap[(int)(y / scale)];
+    }
+
+    return out;
+}
+
+void rg_gui_set_font_type(uint8_t type)
+{
+    int index = (type / 5) % fonts_count;
+    int size  = (type % 5);
+
+    font_info.points = 8 + (size * 2);
+    font_info.type = (index * 5) + size;
+    font_info.font = fonts[index];
+    font_info.width  = RG_MAX(font_info.font->width, 8);
     font_info.height = font_info.points;
-    font_info.width = 8;
-    rg_settings_int32_set(SETTING_FONTSIZE, font_info.points);
+
+    rg_settings_set_int32(SETTING_FONTTYPE, font_info.type);
+
+    RG_LOGI("Font set to: points=%d, size=%dx%d, scaling=%.2f\n",
+        font_info.points, font_info.width, font_info.height,
+        (float)font_info.points / font_info.font->height);
 }
 
 font_info_t rg_gui_get_font_info(void)
@@ -58,67 +135,78 @@ font_info_t rg_gui_get_font_info(void)
     return font_info;
 }
 
-int rg_gui_draw_text(int x_pos, int y_pos, int width, const char *text, uint16_t color, uint16_t color_bg)
+int rg_gui_draw_text(int x_pos, int y_pos, int width, const char *text,
+                     uint16_t color_fg, uint16_t color_bg, uint32_t flags)
 {
-    int glyph_width = font_info.width;
-    int glyph_height = font_info.height;
-    int text_len = 1;
-    int height = 0;
-    float scale = (float)glyph_height / 8;
+    int line_height = font_info.height;
+    int line_width = width;
+    bool autosize = (width < 1);
 
-    if (text == NULL || text[0] == 0) {
+    if (!text || !*text) {
         text = " ";
     }
 
-    text_len = strlen(text);
-
-    if (width < 1) {
-        width = text_len * glyph_width;
+    if (line_width > (RG_SCREEN_WIDTH - x_pos) || autosize) {
+        line_width = (RG_SCREEN_WIDTH - x_pos);
     }
 
-    if (width > (RG_SCREEN_WIDTH - x_pos)) {
-        width = (RG_SCREEN_WIDTH - x_pos);
-    }
+    const char *ptr = text;
+    int y_offset = 0;
 
-    int line_len = width / glyph_width;
-    char buffer[line_len + 1];
-
-    for (int pos = 0; pos < text_len;)
+    while (*ptr)
     {
-        sprintf(buffer, "%.*s", line_len, text + pos);
-        if (strchr(buffer, '\n')) *(strchr(buffer, '\n')) = 0;
-
-        int chunk_len = strlen(buffer);
+        const char *line_start = ptr;
         int x_offset = 0;
 
-        for (int i = 0; i < line_len; i++)
+        while (x_offset < line_width)
         {
-            const char *glyph = font8x8_basic[(i < chunk_len) ? buffer[i] : ' '];
-            for (int y = 0; y < glyph_height; y++)
+            int chr = (*ptr == 0 || *ptr == '\n') ? ' ' : *ptr++;
+            rg_glyph_t glyph = get_glyph(font_info.font, font_info.points, chr);
+
+            if (line_width - x_offset < glyph.width) // Do not truncate glyphs
             {
-                int offset = x_offset + (width * y);
-                for (int x = 0; x < 8; x++)
+                glyph.width = line_width - x_offset;
+                memset(&glyph.bitmap, 0, sizeof(glyph.bitmap));
+            }
+
+            for (int y = 0; y < line_height; y++)
+            {
+                uint16_t *output = &overlay_buffer[x_offset + (line_width * y)];
+
+                for (int x = 0; x < glyph.width; x++)
                 {
-                    overlay_buffer[offset + x] = (glyph[(int)(y/scale)] & 1 << x) ? color : color_bg;
+                    output[x] = (glyph.bitmap[y] & (1 << x)) ? color_fg : color_bg;
                 }
             }
-            x_offset += glyph_width;
+
+            x_offset += glyph.width;
+
+            if (autosize && (*ptr == 0 || *ptr == '\n') && x_offset != line_width)
+            {
+                line_width = x_offset;
+                x_offset = 0;
+                ptr = line_start;
+            }
         }
 
-        rg_display_write(x_pos, y_pos + height, width, glyph_height, 0, overlay_buffer);
+        rg_display_write(x_pos, y_pos + y_offset, x_offset, line_height, 0, overlay_buffer);
 
-        height += glyph_height;
-        pos += chunk_len;
+        y_offset += line_height;
 
-        if (*(text + pos) == 0 || *(text + pos) == '\n') pos++;
+        if (*ptr == '\n') {
+            ptr++;
+        }
+        else if (!(flags & RG_TEXT_WRAP)) {
+            break;
+        }
     }
 
-    return height;
+    return y_offset;
 }
 
 void rg_gui_draw_rect(int x, int y, int width, int height, int border, uint16_t color)
 {
-    if (width == 0 || height == 0 || border == 0)
+    if (width <= 0 || height <= 0 || border <= 0)
         return;
 
     int pixels = (width > height ? width : height) * border;
@@ -134,7 +222,7 @@ void rg_gui_draw_rect(int x, int y, int width, int height, int border, uint16_t 
 
 void rg_gui_draw_fill_rect(int x, int y, int width, int height, uint16_t color)
 {
-    if (width == 0 || height == 0)
+    if (width <= 0 || height <= 0)
         return;
 
     for (int i = 0; i < width * 16; i++)
@@ -336,7 +424,7 @@ void rg_gui_draw_dialog(const char *header, const dialog_option_t *options, int 
     {
         int pad = (0.5f * (text_width - strlen(header)) * font_info.width);
         rg_gui_draw_rect(x, y, box_width - 8, row_height + 4, (row_height + 4 / 2), theme.box_background);
-        rg_gui_draw_text(x + pad, y, 0, header, theme.box_header, theme.box_background);
+        rg_gui_draw_text(x + pad, y, 0, header, theme.box_header, theme.box_background, 0);
         y += row_height + 4;
     }
 
@@ -351,10 +439,11 @@ void rg_gui_draw_dialog(const char *header, const dialog_option_t *options, int 
             sprintf(row, " %s ", label);
         }
 
-        uint16_t color = (options[i].flags == RG_DIALOG_FLAG_NORMAL) ? theme.item_standard : theme.item_disabled;
+        uint16_t color = (options[i].flags == RG_DIALOG_FLAG_NORMAL)
+                            ? theme.item_standard : theme.item_disabled;
         uint16_t fg = (i == sel) ? theme.box_background : color;
         uint16_t bg = (i == sel) ? color : theme.box_background;
-        row_height = rg_gui_draw_text(x, y + row_margin, inner_width, row, fg, bg);
+        row_height = rg_gui_draw_text(x, y + row_margin, inner_width, row, fg, bg, RG_TEXT_WRAP);
         row_height += row_margin * 2;
         rg_gui_draw_rect(x, y, inner_width, row_height, row_margin, bg);
         y += row_height;
@@ -374,84 +463,89 @@ int rg_gui_dialog(const char *header, const dialog_option_t *options_const, int 
     int last_key = -1;
 
     // We create a copy of options because the callbacks might modify it (ie option->value)
-
     dialog_option_t options[options_count + 1];
 
     for (int i = 0; i <= options_count; i++)
     {
-        options[i] = options_const[i];
+        char value_buffer[128] = {0xFF, 0};
 
-        if (options[i].value)
-        {
-            options[i].value = calloc(1, strlen(options[i].value) + 32);
-            strcpy(options[i].value, options_const[i].value);
-        }
+        options[i] = options_const[i];
 
         if (options[i].update_cb)
         {
+            options[i].value = value_buffer;
             options[i].update_cb(&options[i], RG_DIALOG_INIT);
+            if (value_buffer[0] == 0xFF) // Not updated, reset ptr
+                options[i].value = options_const[i].value;
+        }
+
+        if (options[i].value)
+        {
+            char *new_value = malloc(strlen(options[i].value) + 16);
+            strcpy(new_value, options[i].value);
+            options[i].value = new_value;
         }
     }
 
     rg_gui_draw_dialog(header, options, sel);
 
-    wait_all_keys_released();
+    rg_input_wait_for_key(GAMEPAD_KEY_ALL, false);
 
     while (1)
     {
-        gamepad_state_t joystick = rg_input_read_gamepad();
+        uint32_t joystick = rg_input_read_gamepad();
 
         if (last_key >= 0) {
-            if (!joystick.values[last_key]) {
+            if (!(joystick & last_key)) {
                 last_key = -1;
             }
         }
         else {
             dialog_return_t select = RG_DIALOG_IGNORE;
 
-            if (joystick.values[GAMEPAD_KEY_UP]) {
+            if (joystick & GAMEPAD_KEY_UP) {
                 last_key = GAMEPAD_KEY_UP;
                 if (--sel < 0) sel = options_count - 1;
             }
-            else if (joystick.values[GAMEPAD_KEY_DOWN]) {
+            else if (joystick & GAMEPAD_KEY_DOWN) {
                 last_key = GAMEPAD_KEY_DOWN;
                 if (++sel > options_count - 1) sel = 0;
             }
-            else if (joystick.values[GAMEPAD_KEY_B]) {
+            else if (joystick & GAMEPAD_KEY_B) {
                 last_key = GAMEPAD_KEY_B;
                 select = RG_DIALOG_CANCEL;
             }
-            else if (joystick.values[GAMEPAD_KEY_VOLUME]) {
+            else if (joystick & GAMEPAD_KEY_VOLUME) {
                 last_key = GAMEPAD_KEY_VOLUME;
                 select = RG_DIALOG_CANCEL;
             }
-            else if (joystick.values[GAMEPAD_KEY_MENU]) {
+            else if (joystick & GAMEPAD_KEY_MENU) {
                 last_key = GAMEPAD_KEY_MENU;
                 select = RG_DIALOG_CANCEL;
             }
             if (options[sel].flags != RG_DIALOG_FLAG_DISABLED) {
-                if (joystick.values[GAMEPAD_KEY_LEFT]) {
+                if (joystick & GAMEPAD_KEY_LEFT) {
                     last_key = GAMEPAD_KEY_LEFT;
                     if (options[sel].update_cb != NULL) {
                         select = options[sel].update_cb(&options[sel], RG_DIALOG_PREV);
                         sel_old = -1;
                     }
                 }
-                else if (joystick.values[GAMEPAD_KEY_RIGHT]) {
+                else if (joystick & GAMEPAD_KEY_RIGHT) {
                     last_key = GAMEPAD_KEY_RIGHT;
                     if (options[sel].update_cb != NULL) {
                         select = options[sel].update_cb(&options[sel], RG_DIALOG_NEXT);
                         sel_old = -1;
                     }
                 }
-                else if (joystick.values[GAMEPAD_KEY_START]) {
+                else if (joystick & GAMEPAD_KEY_START) {
                     last_key = GAMEPAD_KEY_START;
                     if (options[sel].update_cb != NULL) {
                         select = options[sel].update_cb(&options[sel], RG_DIALOG_ALT);
                         sel_old = -1;
                     }
                 }
-                else if (joystick.values[GAMEPAD_KEY_A]) {
+                else if (joystick & GAMEPAD_KEY_A) {
                     last_key = GAMEPAD_KEY_A;
                     if (options[sel].update_cb != NULL) {
                         select = options[sel].update_cb(&options[sel], RG_DIALOG_ENTER);
@@ -491,7 +585,13 @@ int rg_gui_dialog(const char *header, const dialog_option_t *options_const, int 
 
     rg_input_wait_for_key(last_key, false);
 
-    rg_display_set_config_param(changed, 1);
+    // This will force a redraw
+    rg_display_reset_config();
+
+    for (int i = 0; i < options_count; i++)
+    {
+        free(options[i].value);
+    }
 
     for (int i = 0; i < options_count; i++)
     {
@@ -545,18 +645,18 @@ static dialog_return_t volume_update_cb(dialog_option_t *option, dialog_event_t 
 
 static dialog_return_t brightness_update_cb(dialog_option_t *option, dialog_event_t event)
 {
-    int8_t level = rg_display_get_config_param(backlight);
-    int8_t max = RG_BACKLIGHT_LEVEL_COUNT - 1;
+    int8_t level = rg_display_get_backlight();
+    int8_t max = RG_DISPLAY_BACKLIGHT_MAX;
 
     if (event == RG_DIALOG_PREV && level > 0) {
-        rg_display_set_config_param(backlight, --level);
+        rg_display_set_backlight(--level);
     }
 
     if (event == RG_DIALOG_NEXT && level < max) {
-        rg_display_set_config_param(backlight, ++level);
+        rg_display_set_backlight(++level);
     }
 
-    sprintf(option->value, "%d/%d", level + 1, max + 1);
+    sprintf(option->value, "%d/%d", level, max);
 
     return RG_DIALOG_IGNORE;
 }
@@ -566,11 +666,11 @@ static dialog_return_t audio_update_cb(dialog_option_t *option, dialog_event_t e
     int8_t sink = rg_audio_get_sink();
 
     if (event == RG_DIALOG_PREV || event == RG_DIALOG_NEXT) {
-        sink = (sink == RG_AUDIO_SINK_SPEAKER) ? RG_AUDIO_SINK_DAC : RG_AUDIO_SINK_SPEAKER;
+        sink = (sink == RG_AUDIO_SINK_SPEAKER) ? RG_AUDIO_SINK_EXT_DAC : RG_AUDIO_SINK_SPEAKER;
         rg_audio_set_sink(sink);
     }
 
-    strcpy(option->value, (sink == RG_AUDIO_SINK_DAC) ? "Ext DAC" : "Speaker");
+    strcpy(option->value, (sink == RG_AUDIO_SINK_EXT_DAC) ? "Ext DAC" : "Speaker");
 
     return RG_DIALOG_IGNORE;
 }
@@ -578,7 +678,7 @@ static dialog_return_t audio_update_cb(dialog_option_t *option, dialog_event_t e
 static dialog_return_t filter_update_cb(dialog_option_t *option, dialog_event_t event)
 {
     int8_t max = RG_DISPLAY_FILTER_COUNT - 1;
-    int8_t mode = rg_display_get_config_param(filter);
+    int8_t mode = rg_display_get_filter();
     int8_t prev = mode;
 
     if (event == RG_DIALOG_PREV && --mode < 0) mode = max; // 0;
@@ -586,13 +686,13 @@ static dialog_return_t filter_update_cb(dialog_option_t *option, dialog_event_t 
 
     if (mode != prev)
     {
-        rg_display_set_config_param(filter, mode);
+        rg_display_set_filter(mode);
     }
 
-    if (mode == RG_DISPLAY_FILTER_OFF)      strcpy(option->value, "Off  ");
-    if (mode == RG_DISPLAY_FILTER_LINEAR_X) strcpy(option->value, "Horiz");
-    if (mode == RG_DISPLAY_FILTER_LINEAR_Y) strcpy(option->value, "Vert ");
-    if (mode == RG_DISPLAY_FILTER_BILINEAR) strcpy(option->value, "Both ");
+    if (mode == RG_DISPLAY_FILTER_OFF)   strcpy(option->value, "Off  ");
+    if (mode == RG_DISPLAY_FILTER_HORIZ) strcpy(option->value, "Horiz");
+    if (mode == RG_DISPLAY_FILTER_VERT)  strcpy(option->value, "Vert ");
+    if (mode == RG_DISPLAY_FILTER_BOTH)  strcpy(option->value, "Both ");
 
     return RG_DIALOG_IGNORE;
 }
@@ -600,14 +700,14 @@ static dialog_return_t filter_update_cb(dialog_option_t *option, dialog_event_t 
 static dialog_return_t scaling_update_cb(dialog_option_t *option, dialog_event_t event)
 {
     int8_t max = RG_DISPLAY_SCALING_COUNT - 1;
-    int8_t mode = rg_display_get_config_param(scaling);
+    int8_t mode = rg_display_get_scaling();
     int8_t prev = mode;
 
     if (event == RG_DIALOG_PREV && --mode < 0) mode =  max; // 0;
     if (event == RG_DIALOG_NEXT && ++mode > max) mode = 0;  // max;
 
     if (mode != prev) {
-        rg_display_set_config_param(scaling, mode);
+        rg_display_set_scaling(mode);
     }
 
     if (mode == RG_DISPLAY_SCALING_OFF)  strcpy(option->value, "Off  ");
@@ -639,8 +739,8 @@ int rg_gui_settings_menu(const dialog_option_t *extra_options)
 
     if (extra_options) {
         int options_count = get_dialog_items_count(options);
-        int extra_options_count = get_dialog_items_count(extra_options);
-        memcpy(options + options_count, extra_options, (extra_options_count + 1) * sizeof(dialog_option_t));
+        int extra_options_count = get_dialog_items_count(extra_options) + 1;
+        memcpy(options + options_count, extra_options, extra_options_count * sizeof(dialog_option_t));
     }
 
     int ret = rg_gui_dialog("Options", options, 0);
@@ -670,8 +770,8 @@ static void draw_game_status_bar(runtime_stats_t stats)
 
     rg_gui_draw_fill_rect(0, 0, width, height, C_BLACK);
     rg_gui_draw_fill_rect(0, RG_SCREEN_HEIGHT - height, width, height, C_BLACK);
-    rg_gui_draw_text(0, pad_text, width, header, C_LIGHT_GRAY, C_BLACK);
-    rg_gui_draw_text(0, RG_SCREEN_HEIGHT - height + pad_text, width, footer, C_LIGHT_GRAY, C_BLACK);
+    rg_gui_draw_text(0, pad_text, width, header, C_LIGHT_GRAY, C_BLACK, 0);
+    rg_gui_draw_text(0, RG_SCREEN_HEIGHT - height + pad_text, width, footer, C_LIGHT_GRAY, C_BLACK, 0);
     rg_gui_draw_battery(width - 26, 3);
     
 }
@@ -687,15 +787,15 @@ int rg_gui_game_settings_menu(const dialog_option_t *extra_options)
 
     if (extra_options) {
         int options_count = get_dialog_items_count(options);
-        int extra_options_count = get_dialog_items_count(extra_options);
-        memcpy(options + options_count, extra_options, (extra_options_count + 1) * sizeof(dialog_option_t));
+        int extra_options_count = get_dialog_items_count(extra_options) + 1;
+        memcpy(options + options_count, extra_options, extra_options_count * sizeof(dialog_option_t));
     }
 
     // Collect stats before freezing emulation with wait_all_keys_released()
     runtime_stats_t stats = rg_system_get_stats();
 
     rg_audio_set_mute(true);
-    wait_all_keys_released();
+    rg_input_wait_for_key(GAMEPAD_KEY_ALL, false);
     draw_game_status_bar(stats);
 
     int r = rg_gui_settings_menu(options);
@@ -722,24 +822,29 @@ int rg_gui_game_debug_menu(void)
         RG_DIALOG_SEPARATOR,
         {0, "Cheats", NULL, 1, NULL},
         {0, "Rewind", NULL, 1, NULL},
-        {0, "Registers", NULL, 1, NULL},
+        {100, "Crash", NULL, 1, NULL},
         RG_DIALOG_CHOICE_LAST
     };
 
     runtime_stats_t stats = rg_system_get_stats();
-    rg_display_cfg_t display = rg_display_get_config();
+    rg_display_t display = rg_display_get_status();
 
     sprintf(screen_res, "%dx%d", RG_SCREEN_WIDTH, RG_SCREEN_HEIGHT);
-    sprintf(game_res, "%dx%d", display.fb_width, display.fb_height);
-    sprintf(scaled_res, "%dx%d", display.sc_width, display.sc_height);
+    sprintf(game_res, "%dx%d", display.source.width, display.source.height);
+    sprintf(scaled_res, "%dx%d", display.viewport.width, display.viewport.height);
     sprintf(stack_hwm, "%d", stats.freeStackMain);
     sprintf(heap_free, "%d+%d", stats.freeMemoryInt, stats.freeMemoryExt);
     sprintf(block_free, "%d+%d", stats.freeBlockInt, stats.freeBlockExt);
     sprintf(uptime, "%ds", (int)(get_elapsed_time() / 1000 / 1000));
 
-    wait_all_keys_released();
+    rg_input_wait_for_key(GAMEPAD_KEY_ALL, false);
 
-    return rg_gui_dialog("Debugging", options, 0);
+    int r = rg_gui_dialog("Debugging", options, 0);
+
+    if (r == 100)
+        RG_PANIC("Crash test!");
+
+    return r;
 }
 
 static dialog_return_t game_menu_cb(dialog_option_t *option, dialog_event_t event)
@@ -775,7 +880,7 @@ int rg_gui_game_menu(void)
     runtime_stats_t stats = rg_system_get_stats();
 
     rg_audio_set_mute(true);
-    wait_all_keys_released();
+    rg_input_wait_for_key(GAMEPAD_KEY_ALL, false);
     draw_game_status_bar(stats);
 
     int r = rg_gui_dialog("Retro-Go", choices, 0);

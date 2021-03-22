@@ -11,8 +11,7 @@ rtc_t rtc;
 // Set in the far future for VBA-M support
 #define RT_BASE 1893456000
 
-#define SETTING_RTC_ENABLE "RTCenable"
-#define USE_CONFIG_FILE
+static const char *SETTING_RTC_ENABLE = "RTCenable"
 
 void rtc_reset(bool hard, i2c_dev_t dev)
 {
@@ -27,7 +26,7 @@ void rtc_sync(i2c_dev_t dev)
 {
 	time_t timer = time(NULL);
     
-    if(rg_settings_int32_get(SETTING_RTC_ENABLE, 0) == 1)
+    if(rg_settings_get_int32(SETTING_RTC_ENABLE, 0) == 1)
     {
         struct tm time = rg_rtc_getTime(dev);
         rtc.d = dayOfYear(time.tm_year, time.tm_mon, time.tm_mday);

@@ -17,11 +17,8 @@
 ** must bear this legend.
 **
 **
-** nofrendo.c
+** nofrendo.c: Entry point of program
 **
-** Entry point of program
-** Note: all architectures should call these functions
-** $Id: nofrendo.c,v 1.3 2001/04/27 14:37:11 neil Exp $
 */
 
 #include <stdio.h>
@@ -30,31 +27,18 @@
 #include <nofrendo.h>
 #include <nes.h>
 
-/* End the current context */
+
 void nofrendo_stop(void)
 {
     nes_poweroff();
     nes_shutdown();
     osd_shutdown();
-    // vid_shutdown();
 }
 
 int nofrendo_start(const char *filename, int region, int sample_rate, bool stereo)
 {
     if (osd_init())
         return -1;
-
-    if (region == NES_AUTO)
-    {
-        if (
-            strstr(filename, "(E)") != NULL ||
-            strstr(filename, "(Europe)") != NULL ||
-            strstr(filename, "(A)") != NULL ||
-            strstr(filename, "(Australia)") != NULL)
-            region = NES_PAL;
-        else
-            region = NES_NTSC;
-    }
 
     if (!nes_init(region, sample_rate, stereo))
     {

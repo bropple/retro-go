@@ -17,10 +17,8 @@
 ** must bear this legend.
 **
 **
-** map19.c
+** map019.c: Namco 129/163 mapper interface
 **
-** mapper 19 interface
-** $Id: map019.c,v 1.2 2001/04/27 14:37:11 neil Exp $
 */
 
 #include <nofrendo.h>
@@ -36,18 +34,16 @@ typedef struct
 
 static struct
 {
-   int counter;
-   int enabled;
+   uint16 counter;
+   uint16 enabled;
 } irq;
 
 static rom_t *cart;
-static nes_t *nes;
 
-static void map19_init(void)
+
+static void map19_init(rom_t *_cart)
 {
-   nes = nes_getptr();
-   cart = mmc_getinfo();
-
+   cart = _cart;
    irq.counter = 0;
    irq.enabled = 0;
 }
@@ -86,7 +82,7 @@ static void map19_write(uint32 address, uint8 value)
    case 0x1A:
    case 0x1B:
       if (value < 0xE0)
-         page = &cart->vrom[(value % (cart->vrom_banks * 8)) << 10] - (0x2000 + ((reg & 3) << 10));
+         page = &cart->chr_rom[(value % (cart->chr_rom_banks * 8)) << 10] - (0x2000 + ((reg & 3) << 10));
       else
          page = ppu_getnametable(value & 1) - (0x2000 + ((reg & 3) << 10));
       ppu_setpage(1, (reg & 3) + 8, page);
@@ -131,7 +127,7 @@ static void map19_hblank(int scanline)
 {
    if (irq.enabled)
    {
-      irq.counter += nes->cycles_per_line;
+      irq.counter += NES_CYCLES_PER_SCANLINE;
 
       if (irq.counter >= 0x7FFF)
       {
@@ -156,14 +152,14 @@ static void map19_setstate(void *state)
    irq.enabled = ((mapper19Data*)state)->irqCounterEnabled;
 }
 
-static mem_write_handler_t map19_memwrite[] =
+static const mem_write_handler_t map19_memwrite[] =
 {
    { 0x5000, 0x5FFF, map19_write },
    { 0x8000, 0xFFFF, map19_write },
    LAST_MEMORY_HANDLER
 };
 
-static mem_read_handler_t map19_memread[] =
+static const mem_read_handler_t map19_memread[] =
 {
    { 0x5000, 0x5FFF, map19_read },
    LAST_MEMORY_HANDLER
@@ -171,14 +167,14 @@ static mem_read_handler_t map19_memread[] =
 
 mapintf_t map19_intf =
 {
-   19, /* mapper number */
-   "Namco 129/163", /* mapper name */
-   map19_init, /* init routine */
-   NULL, /* vblank callback */
-   map19_hblank, /* hblank callback */
-   map19_getstate, /* get state (snss) */
-   map19_setstate, /* set state (snss) */
-   map19_memread, /* memory read structure */
-   map19_memwrite, /* memory write structure */
-   NULL /* external sound device */
+   19,               /* mapper number */
+   "Namco 129/163",  /* mapper name */
+   map19_init,       /* init routine */
+   NULL,             /* vblank callback */
+   map19_hblank,     /* hblank callback */
+   map19_getstate,   /* get state (snss) */
+   map19_setstate,   /* set state (snss) */
+   map19_memread,    /* memory read structure */
+   map19_memwrite,   /* memory write structure */
+   NULL              /* external sound device */
 };

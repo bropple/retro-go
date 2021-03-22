@@ -15,23 +15,16 @@
 // Global
 static const char* Key_RomFilePath  = "RomFilePath";
 static const char* Key_StartAction  = "StartAction";
-static const char* Key_Backlight    = "Backlight";
 static const char* Key_StartupApp   = "StartupApp";
 static const char* Key_DiskActivity = "DiskActivity";
 // static const char* Key_RetroGoVer   = "RetroGoVer";
 // Per-app
-static const char* Key_Region       = "Region";
-static const char* Key_Palette      = "Palette";
-static const char* Key_DispScaling  = "DispScaling";
-static const char* Key_DispFilter   = "DispFilter";
-static const char* Key_DispRotation = "DistRotation";
-static const char* Key_DispOverscan = "DispOverscan";
-static const char* Key_SpriteLimit  = "SpriteLimit";
 // static const char* Key_AudioFilter  = "AudioFilter";
 
 static int unsaved_changes = 0;
 static bool initialized = false;
 static cJSON *root = NULL;
+static cJSON *app_root = NULL;
 
 #if !USE_CONFIG_FILE
     #include <nvs_flash.h>
@@ -74,7 +67,7 @@ void rg_settings_init()
         nvs_flash_init();
     }
 
-	if (nvs_open(CONFIG_NAMESPACE, NVS_READWRITE, &my_handle) == ESP_OK)
+    if (nvs_open(CONFIG_NAMESPACE, NVS_READWRITE, &my_handle) == ESP_OK)
     {
         if (nvs_get_str(my_handle, CONFIG_NVS_STORE, NULL, &length) == ESP_OK)
         {
@@ -101,6 +94,8 @@ void rg_settings_init()
         root = cJSON_CreateObject();
     }
 
+    app_root = NULL;
+
     initialized = true;
 }
 
@@ -110,26 +105,34 @@ bool rg_settings_save(void)
         return true;
 
     char *buffer = cJSON_Print(root);
-    bool success = false;
-
-    if (buffer)
+    if (!buffer)
     {
-    #if USE_CONFIG_FILE
-        FILE *fp = fopen(CONFIG_FILE_PATH, "wb");
-        if (fp)
-        {
-            success = (fputs(buffer, fp) > 0);
-            fclose(fp);
-        }
-    #else
-        nvs_set_str(my_handle, CONFIG_NVS_STORE, buffer);
-        success = (nvs_commit(my_handle) == ESP_OK);
-    #endif
-        cJSON_free(buffer);
-        unsaved_changes = 0;
+        RG_LOGE("cJSON_Print() failed.\n");
+        return false;
     }
 
-    return success;
+#if USE_CONFIG_FILE
+    FILE *fp = fopen(CONFIG_FILE_PATH, "wb");
+    if (!fp)
+    {
+        // Sometimes the FAT is left in an inconsistent state and this might help
+        rg_fs_delete(CONFIG_FILE_PATH);
+        fp = fopen(CONFIG_FILE_PATH, "wb");
+    }
+    if (fp)
+    {
+        if (fputs(buffer, fp) > 0)
+            unsaved_changes = 0;
+        fclose(fp);
+    }
+#else
+    if (nvs_set_str(my_handle, CONFIG_NVS_STORE, buffer) == ESP_OK
+        && nvs_commit(my_handle) == ESP_OK) unsaved_changes = 0;
+#endif
+
+    cJSON_free(buffer);
+
+    return (unsaved_changes == 0);
 }
 
 void rg_settings_reset(void)
@@ -140,7 +143,7 @@ void rg_settings_reset(void)
     rg_settings_save();
 }
 
-char *rg_settings_string_get(const char *key, const char *default_value)
+char *rg_settings_get_string(const char *key, const char *default_value)
 {
     if (!initialized)
     {
@@ -158,7 +161,7 @@ char *rg_settings_string_get(const char *key, const char *default_value)
     return default_value ? strdup(default_value) : NULL;
 }
 
-void rg_settings_string_set(const char *key, const char *value)
+void rg_settings_set_string(const char *key, const char *value)
 {
     if (!initialized)
     {
@@ -170,7 +173,7 @@ void rg_settings_string_set(const char *key, const char *value)
     unsaved_changes++;
 }
 
-int32_t rg_settings_int32_get(const char *key, int32_t default_value)
+int32_t rg_settings_get_int32(const char *key, int32_t default_value)
 {
     if (!initialized)
     {
@@ -183,14 +186,14 @@ int32_t rg_settings_int32_get(const char *key, int32_t default_value)
     return obj ? obj->valueint : default_value;
 }
 
-void rg_settings_int32_set(const char *key, int32_t value)
+void rg_settings_set_int32(const char *key, int32_t value)
 {
     if (!initialized)
     {
         RG_LOGW("Trying to set key '%s' before rg_settings_init() was called!\n", key);
         return;
     }
-    else if (rg_settings_int32_get(key, ~value) == value)
+    else if (rg_settings_get_int32(key, ~value) == value)
     {
         return; // Do nothing, value identical
     }
@@ -200,136 +203,55 @@ void rg_settings_int32_set(const char *key, int32_t value)
 }
 
 
-int32_t rg_settings_app_int32_get(const char *key, int32_t default_value)
+int32_t rg_settings_get_app_int32(const char *key, int32_t default_value)
 {
-    char app_key[16];
-    sprintf(app_key, "%.12s.%u", key, rg_system_get_app()->id % 1000);
-    return rg_settings_int32_get(app_key, default_value);
+    char app_key[32];
+    snprintf(app_key, 32, "%.16s.%u", key, rg_system_get_app()->id);
+    return rg_settings_get_int32(app_key, default_value);
 }
 
-void rg_settings_app_int32_set(const char *key, int32_t value)
+void rg_settings_set_app_int32(const char *key, int32_t value)
 {
-    char app_key[16];
-    sprintf(app_key, "%.12s.%u", key, rg_system_get_app()->id % 1000);
-    rg_settings_int32_set(app_key, value);
+    char app_key[32];
+    snprintf(app_key, 32, "%.16s.%u", key, rg_system_get_app()->id);
+    rg_settings_set_int32(app_key, value);
 }
-
 
 char* rg_settings_RomFilePath_get()
 {
-    return rg_settings_string_get(Key_RomFilePath, NULL);
+    return rg_settings_get_string(Key_RomFilePath, NULL);
 }
 void rg_settings_RomFilePath_set(const char* value)
 {
-    rg_settings_string_set(Key_RomFilePath, value);
-}
-
-
-int32_t rg_settings_Backlight_get()
-{
-    return rg_settings_int32_get(Key_Backlight, 2);
-}
-void rg_settings_Backlight_set(int32_t value)
-{
-    rg_settings_int32_set(Key_Backlight, value);
+    rg_settings_set_string(Key_RomFilePath, value);
 }
 
 
 emu_start_action_t rg_settings_StartAction_get()
 {
-    return rg_settings_int32_get(Key_StartAction, 0);
+    return rg_settings_get_int32(Key_StartAction, 0);
 }
 void rg_settings_StartAction_set(emu_start_action_t value)
 {
-    rg_settings_int32_set(Key_StartAction, value);
+    rg_settings_set_int32(Key_StartAction, value);
 }
 
 
 int32_t rg_settings_StartupApp_get()
 {
-    return rg_settings_int32_get(Key_StartupApp, 1);
+    return rg_settings_get_int32(Key_StartupApp, 1);
 }
 void rg_settings_StartupApp_set(int32_t value)
 {
-    rg_settings_int32_set(Key_StartupApp, value);
+    rg_settings_set_int32(Key_StartupApp, value);
 }
 
 
 int32_t rg_settings_DiskActivity_get()
 {
-    return rg_settings_int32_get(Key_DiskActivity, 0);
+    return rg_settings_get_int32(Key_DiskActivity, 0);
 }
 void rg_settings_DiskActivity_set(int32_t value)
 {
-    rg_settings_int32_set(Key_DiskActivity, value);
-}
-
-
-int32_t rg_settings_Palette_get()
-{
-    return rg_settings_app_int32_get(Key_Palette, 0);
-}
-void rg_settings_Palette_set(int32_t value)
-{
-    rg_settings_app_int32_set(Key_Palette, value);
-}
-
-
-int32_t rg_settings_SpriteLimit_get()
-{
-    return rg_settings_app_int32_get(Key_SpriteLimit, 1);
-}
-void rg_settings_SpriteLimit_set(int32_t value)
-{
-    rg_settings_app_int32_set(Key_SpriteLimit, value);
-}
-
-
-emu_region_t rg_settings_Region_get()
-{
-    return rg_settings_app_int32_get(Key_Region, EMU_REGION_AUTO);
-}
-void rg_settings_Region_set(emu_region_t value)
-{
-    rg_settings_app_int32_set(Key_Region, value);
-}
-
-
-int32_t rg_settings_DisplayScaling_get()
-{
-    return rg_settings_app_int32_get(Key_DispScaling, RG_DISPLAY_SCALING_FILL);
-}
-void rg_settings_DisplayScaling_set(int32_t value)
-{
-    rg_settings_app_int32_set(Key_DispScaling, value);
-}
-
-
-int32_t rg_settings_DisplayFilter_get()
-{
-    return rg_settings_app_int32_get(Key_DispFilter, RG_DISPLAY_FILTER_OFF);
-}
-void rg_settings_DisplayFilter_set(int32_t value)
-{
-    rg_settings_app_int32_set(Key_DispFilter, value);
-}
-
-
-int32_t rg_settings_DisplayRotation_get()
-{
-    return rg_settings_app_int32_get(Key_DispRotation, RG_DISPLAY_ROTATION_AUTO);
-}
-void rg_settings_DisplayRotation_set(int32_t value)
-{
-    rg_settings_app_int32_set(Key_DispRotation, value);
-}
-
-
-int32_t rg_settings_DisplayOverscan_get()
-{
-    return rg_settings_app_int32_get(Key_DispOverscan, 1);
-}
-void rg_settings_DisplayOverscan_set(int32_t value)
-{
-    rg_settings_app_int32_set(Key_DispOverscan, value);
+    rg_settings_set_int32(Key_DiskActivity, value);
 }

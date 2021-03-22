@@ -17,14 +17,13 @@
 ** must bear this legend.
 **
 **
-** map93.c
+** map093.c: Mapper 93 interface
 **
-** mapper 93 interface
-** $Id: map093.c,v 1.2 2001/04/27 14:37:11 neil Exp $
 */
 
 #include <nofrendo.h>
 #include <mmc.h>
+
 
 static void map93_write(uint32 address, uint8 value)
 {
@@ -39,7 +38,7 @@ static void map93_write(uint32 address, uint8 value)
       ppu_setmirroring(PPU_MIRROR_HORI);
 }
 
-static mem_write_handler_t map93_memwrite[] =
+static const mem_write_handler_t map93_memwrite[] =
 {
    { 0x8000, 0xFFFF, map93_write },
    LAST_MEMORY_HANDLER
@@ -47,30 +46,14 @@ static mem_write_handler_t map93_memwrite[] =
 
 mapintf_t map93_intf =
 {
-   93, /* mapper number */
-   "Mapper 93", /* mapper name */
-   NULL, /* init routine */
-   NULL, /* vblank callback */
-   NULL, /* hblank callback */
-   NULL, /* get state (snss) */
-   NULL, /* set state (snss) */
-   NULL, /* memory read structure */
-   map93_memwrite, /* memory write structure */
-   NULL /* external sound device */
+   93,               /* mapper number */
+   "Mapper 93",      /* mapper name */
+   NULL,             /* init routine */
+   NULL,             /* vblank callback */
+   NULL,             /* hblank callback */
+   NULL,             /* get state (snss) */
+   NULL,             /* set state (snss) */
+   NULL,             /* memory read structure */
+   map93_memwrite,   /* memory write structure */
+   NULL              /* external sound device */
 };
-
-/*
-** $Log: map093.c,v $
-** Revision 1.2  2001/04/27 14:37:11  neil
-** wheeee
-**
-** Revision 1.1  2001/04/27 12:54:40  neil
-** blah
-**
-** Revision 1.1.1.1  2001/04/27 07:03:54  neil
-** initial
-**
-** Revision 1.1  2000/12/11 12:33:48  matt
-** initial revision
-**
-*/

@@ -17,24 +17,22 @@
 ** must bear this legend.
 **
 **
-** map0.c
+** map000.c: mapper 0 interface
 **
-** mapper 0 interface
-** $Id: map000.c,v 1.2 2001/04/27 14:37:11 neil Exp $
 */
 
 #include <mmc.h>
 
 mapintf_t map0_intf =
 {
-   0, /* mapper number */
-   "None", /* mapper name */
-   NULL, /* init routine */
-   NULL, /* vblank callback */
-   NULL, /* hblank callback */
-   NULL, /* get state (snss) */
-   NULL, /* set state (snss) */
-   NULL, /* memory read structure */
-   NULL, /* memory write structure */
-   NULL /* external sound device */
+   0,                /* mapper number */
+   "None",           /* mapper name */
+   NULL,             /* init routine */
+   NULL,             /* vblank callback */
+   NULL,             /* hblank callback */
+   NULL,             /* get state (snss) */
+   NULL,             /* set state (snss) */
+   NULL,             /* memory read structure */
+   NULL,             /* memory write structure */
+   NULL              /* external sound device */
 };

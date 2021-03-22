@@ -17,10 +17,8 @@
 ** must bear this legend.
 **
 **
-** nes6502.h
+** nes/cpu.h: CPU emulation header
 **
-** NES custom 6502 CPU definitions / prototypes
-** $Id: nes6502.h,v 1.2 2001/04/27 14:37:11 neil Exp $
 */
 
 /* NOTE: 16-bit addresses avoided like the plague: use 32-bit values
@@ -70,13 +68,12 @@ typedef struct
 } nes6502_t;
 
 /* Functions which govern the 6502's execution */
-extern int nes6502_execute(int total_cycles);
+extern int nes6502_execute(int cycles);
 extern void nes6502_nmi(void);
 extern void nes6502_irq(void);
 extern void nes6502_irq_clear(void);
 extern uint32 nes6502_getcycles(void);
 extern void nes6502_burn(int cycles);
-extern void nes6502_release(void);
 
 extern nes6502_t *nes6502_init(mem_t *mem);
 extern void nes6502_refresh(void);

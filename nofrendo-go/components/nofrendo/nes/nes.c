@@ -17,10 +17,8 @@
 ** must bear this legend.
 **
 **
-** nes.c
+** nes.c: NES console emulation
 **
-** NES hardware related routines
-** $Id: nes.c,v 1.2 2001/04/27 14:37:11 neil Exp $
 */
 
 #include <nofrendo.h>
@@ -38,12 +36,11 @@ nes_t *nes_getptr(void)
 /* Emulate one frame */
 INLINE void renderframe()
 {
-    int elapsed_cycles;
-    mapintf_t *mapintf = nes.mmc->intf;
+    int elapsed_cycles = 0;
 
     while (nes.scanline < nes.scanlines_per_frame)
     {
-        nes.cycles += nes.cycles_per_line;
+        nes.cycles += nes.cycles_per_scanline;
 
         ppu_scanline(nes.vidbuf, nes.scanline, nes.drawframe);
 
@@ -56,16 +53,29 @@ INLINE void renderframe()
             if (nes.ppu->ctrl0 & PPU_CTRL0F_NMI)
                 nes6502_nmi();
 
-            if (mapintf->vblank)
-                mapintf->vblank();
+            if (nes.mapper->vblank)
+                nes.mapper->vblank();
         }
 
-        if (mapintf->hblank)
-            mapintf->hblank(nes.scanline);
+        if (nes.mapper->hblank)
+            nes.mapper->hblank(nes.scanline);
 
-        elapsed_cycles = nes6502_execute(nes.cycles);
-        apu_fc_advance(elapsed_cycles);
-        nes.cycles -= elapsed_cycles;
+        if (nes.timer_func == NULL)
+        {
+            elapsed_cycles = nes6502_execute(nes.cycles);
+            apu_fc_advance(elapsed_cycles);
+            nes.cycles -= elapsed_cycles;
+        }
+        else
+        {
+            while (nes.cycles >= 1)
+            {
+                elapsed_cycles = nes6502_execute(MIN(nes.timer_period, nes.cycles));
+                apu_fc_advance(elapsed_cycles);
+                nes.timer_func(elapsed_cycles);
+                nes.cycles -= elapsed_cycles;
+            }
+        }
 
         ppu_endscanline();
         nes.scanline++;
@@ -100,6 +110,13 @@ void nes_emulate(void)
     }
 }
 
+/* This sets a timer to be fired every `period` cpu cycles. It is NOT accurate. */
+void nes_settimer(nes_timer_t *func, long period)
+{
+    nes.timer_func = func;
+    nes.timer_period = period;
+}
+
 void nes_poweroff(void)
 {
     nes.poweroff = true;
@@ -114,13 +131,13 @@ void nes_setcompathacks(void)
 {
     // Hack to fix many MMC3 games with status bar vertical alignment issues
     // The issue is that the CPU and PPU aren't running in sync
-    // if (nes.region == NES_NTSC && nes.rominfo->mapper_number == 4)
-    if (nes.rominfo->checksum == 0xD8578BFD || // Zen Intergalactic
-        nes.rominfo->checksum == 0x2E6301ED || // Super Mario Bros 3
-        nes.rominfo->checksum == 0x5ED6F221 || // Kirby's Adventure
-        nes.rominfo->checksum == 0xD273B409)   // Power Blade 2
+    // if (nes.region == NES_NTSC && nes.cart->mapper_number == 4)
+    if (nes.cart->checksum == 0xD8578BFD || // Zen Intergalactic
+        nes.cart->checksum == 0x2E6301ED || // Super Mario Bros 3
+        nes.cart->checksum == 0x5ED6F221 || // Kirby's Adventure
+        nes.cart->checksum == 0xD273B409)   // Power Blade 2
     {
-        nes.cycles_per_line += 2.5;
+        nes.cycles_per_scanline += 2.5;
         MESSAGE_INFO("NES: Enabled MMC3 Timing Hack\n");
     }
 }
@@ -129,24 +146,23 @@ void nes_setcompathacks(void)
 bool nes_insertcart(const char *filename)
 {
     /* rom file */
-    nes.rominfo = rom_load(filename);
-    if (NULL == nes.rominfo)
+    nes.cart = rom_loadfile(filename);
+    if (NULL == nes.cart)
         goto _fail;
 
     /* mapper */
-    nes.mmc = mmc_init(nes.rominfo);
-    if (NULL == nes.mmc)
+    nes.mapper = mmc_init(nes.cart);
+    if (NULL == nes.mapper)
         goto _fail;
 
-    nes.mem->mapper = nes.mmc->intf;
-
-    /* if there's VRAM, let the PPU know */
-    nes.ppu->vram_present = (NULL != nes.rominfo->vram);
+    /* if we're using VRAM, let the PPU know */
+    nes.ppu->vram_present = (nes.cart->chr_rom == NULL);
+    // nes.ppu->vram_present = (NULL != nes.cart->chr_ram); // FIX ME: This is always true?
 
     nes_setregion(nes.region);
     nes_setcompathacks();
 
-    nes_reset(HARD_RESET);
+    nes_reset(true);
 
     return true;
 
@@ -155,12 +171,21 @@ _fail:
     return false;
 }
 
-/* Reset NES hardware */
-void nes_reset(reset_type_t reset_type)
+/* insert a disk into the FDS */
+bool nes_insertdisk(const char *filename)
 {
-    if (nes.rominfo->vram)
+    return false;
+}
+
+/* Reset NES hardware */
+void nes_reset(bool hard_reset)
+{
+    if (hard_reset)
     {
-        memset(nes.rominfo->vram, 0, 0x2000 * nes.rominfo->vram_banks);
+        if (nes.cart->chr_ram_banks > 0)
+            memset(nes.cart->chr_ram, 0, nes.cart->chr_ram_banks * ROM_CHR_BANK_SIZE);
+        if (nes.cart->prg_ram_banks > 0)
+            memset(nes.cart->prg_ram, 0, nes.cart->prg_ram_banks * ROM_PRG_BANK_SIZE);
     }
 
     apu_reset();
@@ -173,7 +198,7 @@ void nes_reset(reset_type_t reset_type)
     nes.scanline = 241;
     nes.cycles = 0;
 
-    MESSAGE_INFO("NES: System reset (%s)\n", (SOFT_RESET == reset_type) ? "soft" : "hard");
+    MESSAGE_INFO("NES: System reset (%s)\n", hard_reset ? "hard" : "soft");
 }
 
 /* Shutdown NES */
@@ -184,7 +209,7 @@ void nes_shutdown(void)
     ppu_shutdown();
     apu_shutdown();
     nes6502_shutdown();
-    rom_free(nes.rominfo);
+    rom_free();
     free(nes.framebuffers[0]);
     free(nes.framebuffers[1]);
 }
@@ -192,23 +217,36 @@ void nes_shutdown(void)
 /* Setup region-dependant timings */
 void nes_setregion(region_t region)
 {
+    nes.region = region;
+
+    if (region == NES_AUTO && nes.cart != NULL)
+    {
+        if (strstr(nes.cart->filename, "(E)") != NULL ||
+            strstr(nes.cart->filename, "(Europe)") != NULL ||
+            strstr(nes.cart->filename, "(A)") != NULL ||
+            strstr(nes.cart->filename, "(Australia)") != NULL)
+            region = NES_PAL;
+        else
+            region = NES_NTSC;
+    }
+
     // https://wiki.nesdev.com/w/index.php/Cycle_reference_chart
     if (region == NES_PAL)
     {
-        nes.region = NES_PAL;
+        nes.cpu_clock = NES_CPU_CLOCK_PAL;
         nes.refresh_rate = NES_REFRESH_RATE_PAL;
         nes.scanlines_per_frame = NES_SCANLINES_PAL;
+        nes.cycles_per_scanline = nes.cpu_clock / nes.refresh_rate / nes.scanlines_per_frame;
         nes.overscan = 0;
-        nes.cycles_per_line = 341.f * 5 / 16;
         MESSAGE_INFO("NES: System region: PAL\n");
     }
     else
     {
-        nes.region = NES_NTSC;
+        nes.cpu_clock = NES_CPU_CLOCK_NTSC;
         nes.refresh_rate = NES_REFRESH_RATE_NTSC;
         nes.scanlines_per_frame = NES_SCANLINES_NTSC;
+        nes.cycles_per_scanline = nes.cpu_clock / nes.refresh_rate / nes.scanlines_per_frame;
         nes.overscan = 8;
-        nes.cycles_per_line = 341.f * 4 / 12;
         MESSAGE_INFO("NES: System region: NTSC\n");
     }
 }
@@ -218,12 +256,14 @@ bool nes_init(region_t region, int sample_rate, bool stereo)
 {
     memset(&nes, 0, sizeof(nes_t));
 
-    nes_setregion(region);
-
     nes.autoframeskip = true;
     nes.poweroff = false;
     nes.pause = false;
     nes.drawframe = true;
+    nes.region = region;
+    nes.refresh_rate = 60;
+
+    // nes_setregion(region);
 
     /* Framebuffers */
     nes.framebuffers[0] = rg_alloc(NES_SCREEN_PITCH * NES_SCREEN_HEIGHT, MEM_FAST);
@@ -241,19 +281,21 @@ bool nes_init(region_t region, int sample_rate, bool stereo)
     if (NULL == nes.cpu)
         goto _fail;
 
-    /* apu */
-    nes.apu = apu_init(region, sample_rate, stereo);
-    if (NULL == nes.apu)
-        goto _fail;
-
     /* ppu */
-    nes.ppu = ppu_init(region);
+    nes.ppu = ppu_init();
     if (NULL == nes.ppu)
         goto _fail;
 
+    /* apu */
+    nes.apu = apu_init(sample_rate, stereo);
+    if (NULL == nes.apu)
+        goto _fail;
+
+    MESSAGE_INFO("NES: System initialized!\n");
     return true;
 
 _fail:
+    MESSAGE_ERROR("NES: System initialized failed!\n");
     nes_shutdown();
     return false;
 }

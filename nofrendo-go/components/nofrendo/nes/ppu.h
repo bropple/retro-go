@@ -17,10 +17,8 @@
 ** must bear this legend.
 **
 **
-** nes_ppu.h
+** nes/ppu.h: Graphics emulation header
 **
-** NES Picture Processing Unit (PPU) emulation header file
-** $Id: nes_ppu.h,v 1.2 2001/04/27 14:37:11 neil Exp $
 */
 
 #ifndef _NES_PPU_H_
@@ -129,7 +127,7 @@ typedef struct
    uint32 strike_cycle;
 
    int scanline;
-   int scanlines_per_frame;
+   int last_scanline;
 
    /* Determines if left column can be cropped/blanked */
    int left_bg_counter;
@@ -147,8 +145,8 @@ typedef struct
 
 typedef struct
 {
-    char  name[16];
-    uint8 data[192]; // rgb_t
+   char  name[16];
+   uint8 data[192]; // rgb_t
 } palette_t;
 
 /* Mirroring / Paging */
@@ -159,7 +157,7 @@ extern uint8 *ppu_getpage(int page_num);
 extern uint8 *ppu_getnametable(int nt);
 
 /* Control */
-extern ppu_t *ppu_init(int region);
+extern ppu_t *ppu_init(void);
 extern void ppu_refresh(void);
 extern void ppu_reset(void);
 extern void ppu_shutdown(void);

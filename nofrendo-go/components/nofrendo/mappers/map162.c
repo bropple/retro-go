@@ -17,10 +17,8 @@
 ** must bear this legend.
 **
 **
-** map162.c
-**
-** Mapper 162 and 163 interface (Nanjing games)
-** Implementation by ducalex
+** map162.c: Mapper 162 and 163 interface (Nanjing games)
+** by ducalex
 **
 */
 
@@ -35,6 +33,7 @@ static uint8 reg5200;
 static uint8 reg5300;
 static uint8 trigger;
 
+
 static void map162_sync()
 {
    uint8 bank = (reg5200 & 0x3) << 4 | (reg5000 & 0xF);
@@ -42,8 +41,10 @@ static void map162_sync()
    // mmc_bankvrom(8, 0x0000, 0);
 }
 
-static void map162_init(void)
+static void map162_init(rom_t *cart)
 {
+   UNUSED(cart);
+
    reg5000 = 0;
    reg5100 = 1;
    reg5101 = 1;
@@ -94,7 +95,7 @@ static void map162_reg_write(uint32 address, uint8 value)
    {
    case 0x5000:
       reg5000 = value;
-      if (!(reg5000 & 0x80) && nes_getptr()->scanline < 128)
+      if (!(reg5000 & 0x80) && NES_CURRENT_SCANLINE < 128)
       {
          mmc_bankvrom(8, 0x0000, 0);
       }
@@ -129,14 +130,14 @@ static void map162_reg_write(uint32 address, uint8 value)
    }
 }
 
-static mem_write_handler_t map162_memwrite[] =
+static const mem_write_handler_t map162_memwrite[] =
 {
    {0x5000, 0x5FFF, map162_reg_write},
    // {0x6000, 0x7FFF, map162_ram_write},
    LAST_MEMORY_HANDLER
 };
 
-static mem_read_handler_t map162_memread[] =
+static const mem_read_handler_t map162_memread[] =
 {
    {0x5000, 0x5FFF, map162_reg_read},
    // {0x6000, 0x7FFF, map162_ram_read},
@@ -145,28 +146,28 @@ static mem_read_handler_t map162_memread[] =
 
 mapintf_t map162_intf =
 {
-   162,             /* mapper number */
-   "Nanjing 162",   /* mapper name */
-   map162_init,     /* init routine */
-   NULL,            /* vblank callback */
-   map162_hblank,   /* hblank callback */
-   NULL,            /* get state (snss) */
-   NULL,            /* set state (snss) */
-   map162_memread,  /* memory read structure */
-   map162_memwrite, /* memory write structure */
-   NULL             /* external sound device */
+   162,              /* mapper number */
+   "Nanjing 162",    /* mapper name */
+   map162_init,      /* init routine */
+   NULL,             /* vblank callback */
+   map162_hblank,    /* hblank callback */
+   NULL,             /* get state (snss) */
+   NULL,             /* set state (snss) */
+   map162_memread,   /* memory read structure */
+   map162_memwrite,  /* memory write structure */
+   NULL              /* external sound device */
 };
 
 mapintf_t map163_intf =
 {
-   163,             /* mapper number */
-   "Nanjing 163",   /* mapper name */
-   map162_init,     /* init routine */
-   NULL,            /* vblank callback */
-   map162_hblank,   /* hblank callback */
-   NULL,            /* get state (snss) */
-   NULL,            /* set state (snss) */
-   map162_memread,  /* memory read structure */
-   map162_memwrite, /* memory write structure */
-   NULL             /* external sound device */
+   163,              /* mapper number */
+   "Nanjing 163",    /* mapper name */
+   map162_init,      /* init routine */
+   NULL,             /* vblank callback */
+   map162_hblank,    /* hblank callback */
+   NULL,             /* get state (snss) */
+   NULL,             /* set state (snss) */
+   map162_memread,   /* memory read structure */
+   map162_memwrite,  /* memory write structure */
+   NULL              /* external sound device */
 };

@@ -17,67 +17,72 @@
 ** must bear this legend.
 **
 **
-** nes_rom.h
+** nes/rom.h: ROM loader header
 **
-** NES ROM loading/saving related defines / prototypes
-** $Id: nes_rom.h,v 1.2 2001/04/27 14:37:11 neil Exp $
 */
 
 #ifndef _NES_ROM_H_
 #define _NES_ROM_H_
 
-#define  ROM_INES_MAGIC       "NES\x1A"
+#define  ROM_INES_MAGIC          "NES\x1A"
+#define  FDS_HEAD_MAGIC          "FDS\x1A"
+#define  FDS_DISK_MAGIC          "\x01*NINTENDO-HVC*"
 
-#define  ROM_FLAG_FOURSCREEN  0x08
-#define  ROM_FLAG_TRAINER     0x04
-#define  ROM_FLAG_BATTERY     0x02
-#define  ROM_FLAG_VERTICAL    0x01
-#define  ROM_FLAG_VERSUS      0x100 // non-ines flags
+#define  ROM_FLAG_FOURSCREEN     0x08
+#define  ROM_FLAG_TRAINER        0x04
+#define  ROM_FLAG_BATTERY        0x02
+#define  ROM_FLAG_VERTICAL       0x01
+#define  ROM_FLAG_FREE_DATA      0x100
 
-#define  TRAINER_OFFSET    0x1000
-#define  TRAINER_LENGTH    0x200
+#define  ROM_PRG_BANK_SIZE       0x2000
+#define  ROM_CHR_BANK_SIZE       0x2000
 
-#define  ROM_BANK_LENGTH   0x4000
-#define  VROM_BANK_LENGTH  0x2000
-#define  SRAM_BANK_LENGTH  0x0400
-#define  VRAM_BANK_LENGTH  0x2000
+#define  TRAINER_OFFSET          0x1000
+#define  TRAINER_LENGTH          0x200
 
-typedef struct
+typedef struct __attribute__((packed))
 {
-   uint8 ines_magic[4];
-   uint8 rom_banks;
-   uint8 vrom_banks;
+   uint8 magic[4];
+   uint8 prg_banks;
+   uint8 chr_banks;
    uint8 rom_type;
    uint8 mapper_hinybble;
    uint32 reserved1;
    uint32 reserved2;
 } inesheader_t;
 
+typedef struct __attribute__((packed))
+{
+   uint8 magic[4];
+   uint8 sides;
+   uint8 reserved[11];
+} fdsheader_t;
+
 typedef struct
 {
-   inesheader_t header;
-
-   /* pointers to ROM and VROM */
-   uint8 *rom, *vrom;
-
-   /* SRAM and vram are not iNES header-defined, always alloc them */
-   uint8 vram[1 * 0x2000];
-   uint8 sram[8 * 0x400];
-
-   /* number of banks */
-   int rom_banks, vrom_banks;
-   int sram_banks, vram_banks;
-
-   int mapper_number;
-
-   uint16 flags;
-
    char filename[PATH_MAX + 1];
+
+   uint8 *data_ptr; // Top of our allocation
+   size_t data_len; // Size of our allocation
+
+   uint8 *prg_rom;
+   uint8 *chr_rom;
+   uint8 *prg_ram;
+   uint8 *chr_ram;
+
+   int prg_rom_banks;
+   int chr_rom_banks;
+   int prg_ram_banks;
+   int chr_ram_banks;
+
+   uint32 mapper_number;
+   uint32 flags;
    uint32 checksum;
 } rom_t;
 
 
-extern rom_t *rom_load(const char *filename);
-extern void rom_free(rom_t *rominfo);
+extern rom_t *rom_loadfile(const char *filename);
+extern rom_t *rom_loadmem(uint8 *data, size_t size);
+extern void rom_free(void);
 
 #endif /* _NES_ROM_H_ */

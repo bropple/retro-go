@@ -10,39 +10,34 @@
 #include "favorites.h"
 #include "gui.h"
 
-#define SETTING_SELECTED_TAB  "SelectedTab"
-#define SETTING_GUI_THEME     "ColorTheme"
-#define SETTING_SHOW_EMPTY    "ShowEmptyTabs"
-#define SETTING_SHOW_PREVIEW  "ShowPreview"
-#define SETTING_PREVIEW_SPEED "PreviewSpeed"
+static const char *SETTING_SELECTED_TAB  = "SelectedTab";
+static const char *SETTING_GUI_THEME     = "ColorTheme";
+static const char *SETTING_SHOW_EMPTY    = "ShowEmptyTabs";
+static const char *SETTING_SHOW_PREVIEW  = "ShowPreview";
+static const char *SETTING_PREVIEW_SPEED = "PreviewSpeed";
 
-#define SETTING_RTC_ENABLE    "RTCenable"
-#define SETTING_RTC_FORMAT    "RTCformat"
-#define SETTING_RTC_MONTH_TXT "RTCmonthText"
-#define SETTING_RTC_HOUR_PREF "RTChourPref"
+static const char *SETTING_RTC_ENABLE    = "RTCenable";
+static const char *SETTING_RTC_FORMAT    = "RTCformat";
+static const char *SETTING_RTC_MONTH_TXT = "RTCmonthText";
+static const char *SETTING_RTC_HOUR_PREF = "RTChourPref";
 
-#define USE_CONFIG_FILE
-
-//global variables not ideal, but avoids modifying many functions
-//also more acceptable for embedded applications
 struct tm RTCtimeBuf = { 0 }; //time buffer for use in RTC settings
 i2c_dev_t dev;
 
-static dialog_return_t font_size_cb(dialog_option_t *option, dialog_event_t event)
+static dialog_return_t font_type_cb(dialog_option_t *option, dialog_event_t event)
 {
-    int font_size = rg_gui_get_font_info().points;
-    if (event == RG_DIALOG_PREV && font_size > 8) {
-        rg_gui_set_font_size(font_size -= 4);
+    if (event == RG_DIALOG_PREV) {
+        rg_gui_set_font_type(rg_gui_get_font_info().type - 1);
         gui_redraw();
     }
-    if (event == RG_DIALOG_NEXT && font_size < 16) {
-        rg_gui_set_font_size(font_size += 4);
+    if (event == RG_DIALOG_NEXT) {
+        rg_gui_set_font_type(rg_gui_get_font_info().type + 1);
         gui_redraw();
     }
-    sprintf(option->value, "%d", font_size);
-    if (font_size ==  8) strcpy(option->value, "Small ");
-    if (font_size == 12) strcpy(option->value, "Medium");
-    if (font_size == 16) strcpy(option->value, "Large ");
+
+    font_info_t info = rg_gui_get_font_info();
+    sprintf(option->value, "%s %d", info.font->name, info.height);
+
     return RG_DIALOG_IGNORE;
 }
 
@@ -50,7 +45,7 @@ static dialog_return_t show_empty_cb(dialog_option_t *option, dialog_event_t eve
 {
     if (event == RG_DIALOG_PREV || event == RG_DIALOG_NEXT) {
         gui.show_empty = !gui.show_empty;
-        rg_settings_int32_set(SETTING_SHOW_EMPTY, gui.show_empty);
+        rg_settings_set_int32(SETTING_SHOW_EMPTY, gui.show_empty);
     }
     strcpy(option->value, gui.show_empty ? "Show" : "Hide");
     return RG_DIALOG_IGNORE;
@@ -81,15 +76,15 @@ static dialog_return_t disk_activity_cb(dialog_option_t *option, dialog_event_t 
 static dialog_return_t show_preview_cb(dialog_option_t *option, dialog_event_t event)
 {
     if (event == RG_DIALOG_PREV) {
-        if (--gui.show_preview < 0) gui.show_preview = 4;
-        rg_settings_int32_set(SETTING_SHOW_PREVIEW, gui.show_preview);
+        if (--gui.show_preview < 0) gui.show_preview = PREVIEW_MODE_COUNT - 1;
+        rg_settings_set_int32(SETTING_SHOW_PREVIEW, gui.show_preview);
     }
     if (event == RG_DIALOG_NEXT) {
-        if (++gui.show_preview > 4) gui.show_preview = 0;
-        rg_settings_int32_set(SETTING_SHOW_PREVIEW, gui.show_preview);
+        if (++gui.show_preview >= PREVIEW_MODE_COUNT) gui.show_preview = 0;
+        rg_settings_set_int32(SETTING_SHOW_PREVIEW, gui.show_preview);
     }
     const char *values[] = {"None      ", "Cover,Save", "Save,Cover", "Cover     ", "Save      "};
-    strcpy(option->value, values[gui.show_preview % 5]);
+    strcpy(option->value, values[gui.show_preview % PREVIEW_MODE_COUNT]);
     return RG_DIALOG_IGNORE;
 }
 
@@ -97,7 +92,7 @@ static dialog_return_t show_preview_speed_cb(dialog_option_t *option, dialog_eve
 {
     if (event == RG_DIALOG_PREV || event == RG_DIALOG_NEXT) {
         gui.show_preview_fast = gui.show_preview_fast ? 0 : 1;
-        rg_settings_int32_set(SETTING_PREVIEW_SPEED, gui.show_preview_fast);
+        rg_settings_set_int32(SETTING_PREVIEW_SPEED, gui.show_preview_fast);
     }
     strcpy(option->value, gui.show_preview_fast ? "Short" : "Long");
     return RG_DIALOG_IGNORE;
@@ -108,12 +103,12 @@ static dialog_return_t color_shift_cb(dialog_option_t *option, dialog_event_t ev
     int max = gui_themes_count - 1;
     if (event == RG_DIALOG_PREV) {
         if (--gui.theme < 0) gui.theme = max;
-        rg_settings_int32_set(SETTING_GUI_THEME, gui.theme);
+        rg_settings_set_int32(SETTING_GUI_THEME, gui.theme);
         gui_redraw();
     }
     if (event == RG_DIALOG_NEXT) {
         if (++gui.theme > max) gui.theme = 0;
-        rg_settings_int32_set(SETTING_GUI_THEME, gui.theme);
+        rg_settings_set_int32(SETTING_GUI_THEME, gui.theme);
         gui_redraw();
     }
     sprintf(option->value, "%d/%d", gui.theme + 1, max + 1);
@@ -124,7 +119,7 @@ static dialog_return_t rtc_enable_cb(dialog_option_t *option, dialog_event_t eve
 {
     if (event == RG_DIALOG_PREV || event == RG_DIALOG_NEXT) {
         gui.rtc_enable = gui.rtc_enable ? 0 : 1;
-        rg_settings_int32_set(SETTING_RTC_ENABLE, gui.rtc_enable);
+        rg_settings_set_int32(SETTING_RTC_ENABLE, gui.rtc_enable);
         
     }
     strcpy(option->value, gui.rtc_enable ? "On" : "Off");
@@ -136,11 +131,11 @@ static dialog_return_t rtc_format_cb(dialog_option_t *option, dialog_event_t eve
 {
     if (event == RG_DIALOG_PREV) {
         if (--gui.rtc_format < 0) gui.rtc_format = 2;
-        rg_settings_int32_set(SETTING_RTC_FORMAT, gui.rtc_format);
+        rg_settings_set_int32(SETTING_RTC_FORMAT, gui.rtc_format);
     }
     if (event == RG_DIALOG_NEXT) {
         if (++gui.rtc_format > 2) gui.rtc_format = 0;
-        rg_settings_int32_set(SETTING_RTC_FORMAT, gui.rtc_format);
+        rg_settings_set_int32(SETTING_RTC_FORMAT, gui.rtc_format);
     }
     const char *values[] = {"MDY", "DMY", "YMD"};
     strcpy(option->value, values[gui.rtc_format % 3]);
@@ -151,7 +146,7 @@ static dialog_return_t rtc_month_text_cb(dialog_option_t *option, dialog_event_t
 {
     if (event == RG_DIALOG_PREV || event == RG_DIALOG_NEXT) {
         gui.rtc_month_text = gui.rtc_month_text ? 0 : 1;
-        rg_settings_int32_set(SETTING_RTC_MONTH_TXT, gui.rtc_month_text);
+        rg_settings_set_int32(SETTING_RTC_MONTH_TXT, gui.rtc_month_text);
     }
     strcpy(option->value, gui.rtc_month_text ? "On" : "Off");
     return event == RG_DIALOG_ENTER;
@@ -161,7 +156,7 @@ static dialog_return_t rtc_hour_pref_cb(dialog_option_t *option, dialog_event_t 
 {
     if (event == RG_DIALOG_PREV || event == RG_DIALOG_NEXT) {
         gui.rtc_hour_pref = gui.rtc_hour_pref ? 0 : 1;
-        rg_settings_int32_set(SETTING_RTC_HOUR_PREF, gui.rtc_hour_pref);
+        rg_settings_set_int32(SETTING_RTC_HOUR_PREF, gui.rtc_hour_pref);
     }
     strcpy(option->value, gui.rtc_hour_pref ? "24h" : "12h");
     return event == RG_DIALOG_ENTER;
@@ -303,20 +298,32 @@ void retro_loop(i2c_dev_t dev)
     int last_key = -1;
     int selected_tab_last = -1;
 
-    gui.selected     = rg_settings_int32_get(SETTING_SELECTED_TAB, 0);
-    gui.theme        = rg_settings_int32_get(SETTING_GUI_THEME, 0);
-    gui.show_empty   = rg_settings_int32_get(SETTING_SHOW_EMPTY, 1);
-    gui.show_preview = rg_settings_int32_get(SETTING_SHOW_PREVIEW, 1);
-    gui.show_preview_fast = rg_settings_int32_get(SETTING_PREVIEW_SPEED, 0);
-
+    gui.selected     = rg_settings_get_int32(SETTING_SELECTED_TAB, 0);
+    gui.theme        = rg_settings_get_int32(SETTING_GUI_THEME, 0);
+    gui.show_empty   = rg_settings_get_int32(SETTING_SHOW_EMPTY, 1);
+    gui.show_preview = rg_settings_get_int32(SETTING_SHOW_PREVIEW, 1);
+    gui.show_preview_fast = rg_settings_get_int32(SETTING_PREVIEW_SPEED, 0);
+    
     //RTC variables
-    gui.rtc_enable = rg_settings_int32_get(SETTING_RTC_ENABLE, 0);
-    gui.rtc_format = rg_settings_int32_get(SETTING_RTC_FORMAT, 0);
-    gui.rtc_month_text = rg_settings_int32_get(SETTING_RTC_MONTH_TXT, 0);
-    gui.rtc_hour_pref = rg_settings_int32_get(SETTING_RTC_HOUR_PREF, 0);
+    gui.rtc_enable = rg_settings_get_int32(SETTING_RTC_ENABLE, 0);
+    gui.rtc_format = rg_settings_get_int32(SETTING_RTC_FORMAT, 0);
+    gui.rtc_month_text = rg_settings_get_int32(SETTING_RTC_MONTH_TXT, 0);
+    gui.rtc_hour_pref = rg_settings_get_int32(SETTING_RTC_HOUR_PREF, 0);
     
     int last_rtc_enable = gui.rtc_enable;
-    
+
+    if (!gui.show_empty)
+    {
+        // If we're hiding empty tabs then we must preload all files
+        // to avoid flicker and delays when skipping empty tabs...
+        for (int i = 0; i < gui.tabcount; i++)
+        {
+            gui_init_tab(gui.tabs[i]);
+        }
+    }
+
+    rg_display_clear(C_BLACK);
+
     while (true)
     {
         if (gui.selected != selected_tab_last)
@@ -352,7 +359,7 @@ void retro_loop(i2c_dev_t dev)
 
         gui.joystick = rg_input_read_gamepad();
 
-        if (gui.idle_counter > 0 && gui.joystick.bitmask == 0)
+        if (gui.idle_counter > 0 && (gui.joystick & GAMEPAD_KEY_ANY) == 0)
         {
             gui_event(TAB_IDLE, tab);
 
@@ -361,7 +368,7 @@ void retro_loop(i2c_dev_t dev)
         }
 
         if (last_key >= 0) {
-            if (!gui.joystick.values[last_key]) {
+            if (!(gui.joystick & last_key)) {
                 last_key = -1;
                 debounce = 0;
             } else if (debounce++ > 12) {
@@ -369,8 +376,9 @@ void retro_loop(i2c_dev_t dev)
                 last_key = -1;
             }
         } else {
-            for (int i = 0; i < GAMEPAD_KEY_MAX; i++)
-                if (gui.joystick.values[i]) last_key = i;
+            for (int i = 0; i < GAMEPAD_KEY_COUNT; i++)
+                if (gui.joystick & (1 << i))
+                    last_key = (1 << i);
 
             if (last_key == GAMEPAD_KEY_MENU) {
                 char buildstr[32], datestr[32];
@@ -382,6 +390,7 @@ void retro_loop(i2c_dev_t dev)
                     RG_DIALOG_SEPARATOR,
                     {1, "Reboot to firmware", NULL, 1, NULL},
                     {2, "Reset settings", NULL, 1, NULL},
+                    {3, "Clear cache", NULL, 1, NULL},
                     {0, "Close", NULL, 1, NULL},
                     RG_DIALOG_CHOICE_LAST
                 };
@@ -403,13 +412,16 @@ void retro_loop(i2c_dev_t dev)
                         rg_system_restart();
                     }
                 }
+                else if (sel == 3) {
+                    rg_fs_delete(CRC_CACHE_PATH);
+                }
                 gui_redraw();
             }
             else if (last_key == GAMEPAD_KEY_VOLUME) {
                 dialog_option_t options[] = {
                     RG_DIALOG_SEPARATOR,
                     {0, "Color theme", "...",  1, &color_shift_cb},
-                    {0, "Font size  ", "...",  1, &font_size_cb},
+                    {0, "Font type  ", "...",  1, &font_type_cb},
                     {0, "Empty tabs ", "...",  1, &show_empty_cb},
                     {0, "Preview    ", "...",  1, &show_preview_cb},
                     {0, "    - Delay", "...",  1, &show_preview_speed_cb},
@@ -449,7 +461,7 @@ void retro_loop(i2c_dev_t dev)
             }
         }
 
-        if (gui.joystick.bitmask) {
+        if (gui.joystick & GAMEPAD_KEY_ANY) {
             gui.idle_counter = 0;
         } else {
             gui.idle_counter++;
@@ -463,7 +475,7 @@ void retro_loop(i2c_dev_t dev)
         }
         
         //Draw the time in the main menu, only if RTC is enabled
-        if(rg_settings_int32_get(SETTING_RTC_ENABLE, gui.rtc_enable) == 1)
+        if(rg_settings_get_int32(SETTING_RTC_ENABLE, gui.rtc_enable) == 1)
         {
             rg_gui_draw_time(rg_rtc_getTime(dev), 58, 0, gui.rtc_format, gui.rtc_month_text, gui.rtc_hour_pref);
             RTCtimeBuf = rg_rtc_getTime(dev);
@@ -476,9 +488,7 @@ void retro_loop(i2c_dev_t dev)
 
 void app_main(void)
 {
-    //i2c_dev_t dev = rg_system_init(0, 32000);
     dev = rg_system_init(0, 32000);
-    rg_display_clear(0);
 
     emulators_init();
     favorites_init();

@@ -17,16 +17,14 @@
 ** must bear this legend.
 **
 **
-** map94.c
+** map094.c: Senjou no Ookami mapper interface
 **
-** mapper 94 interface
-** $Id: map094.c,v 1.2 2001/04/27 14:37:11 neil Exp $
 */
 
 #include <nofrendo.h>
 #include <mmc.h>
 
-/* mapper 94: Senjou no Ookami */
+
 static void map94_write(uint32 address, uint8 value)
 {
    UNUSED(address);
@@ -35,7 +33,7 @@ static void map94_write(uint32 address, uint8 value)
    mmc_bankrom(16, 0x8000, value >> 2);
 }
 
-static mem_write_handler_t map94_memwrite[] =
+static const mem_write_handler_t map94_memwrite[] =
 {
    { 0x8000, 0xFFFF, map94_write },
    LAST_MEMORY_HANDLER
@@ -43,45 +41,14 @@ static mem_write_handler_t map94_memwrite[] =
 
 mapintf_t map94_intf =
 {
-   94, /* mapper number */
-   "Mapper 94", /* mapper name */
-   NULL, /* init routine */
-   NULL, /* vblank callback */
-   NULL, /* hblank callback */
-   NULL, /* get state (snss) */
-   NULL, /* set state (snss) */
-   NULL, /* memory read structure */
-   map94_memwrite, /* memory write structure */
-   NULL /* external sound device */
+   94,               /* mapper number */
+   "Mapper 94",      /* mapper name */
+   NULL,             /* init routine */
+   NULL,             /* vblank callback */
+   NULL,             /* hblank callback */
+   NULL,             /* get state (snss) */
+   NULL,             /* set state (snss) */
+   NULL,             /* memory read structure */
+   map94_memwrite,   /* memory write structure */
+   NULL              /* external sound device */
 };
-
-/*
-** $Log: map094.c,v $
-** Revision 1.2  2001/04/27 14:37:11  neil
-** wheeee
-**
-** Revision 1.1  2001/04/27 12:54:40  neil
-** blah
-**
-** Revision 1.1.1.1  2001/04/27 07:03:54  neil
-** initial
-**
-** Revision 1.1  2000/10/24 12:19:33  matt
-** changed directory structure
-**
-** Revision 1.5  2000/10/22 19:17:47  matt
-** mapper cleanups galore
-**
-** Revision 1.4  2000/10/21 19:33:38  matt
-** many more cleanups
-**
-** Revision 1.3  2000/08/16 02:50:11  matt
-** random mapper cleanups
-**
-** Revision 1.2  2000/07/06 02:48:43  matt
-** clearly labelled structure members
-**
-** Revision 1.1  2000/07/06 01:01:56  matt
-** initial revision
-**
-*/

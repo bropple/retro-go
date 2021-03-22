@@ -17,17 +17,15 @@
 ** must bear this legend.
 **
 **
-** nes_mmc.h
+** nes/mmc.h: Mapper emulation header
 **
-** NES Memory Management Controller (mapper) defines / prototypes
-** $Id: nes_mmc.h,v 1.2 2001/04/27 14:37:11 neil Exp $
 */
 
 #ifndef _NES_MMC_H_
 #define _NES_MMC_H_
 
-typedef struct mapintf_s mapintf_t;
-typedef struct mmc_s mmc_t;
+typedef struct mapper_s mapper_t;
+typedef const mapper_t mapintf_t;
 
 #include <nofrendo.h>
 #include "state.h"
@@ -35,43 +33,36 @@ typedef struct mmc_s mmc_t;
 #include "rom.h"
 #include "mem.h"
 
-struct mapintf_s
+#define PRG_RAM ((void*)1)
+#define PRG_ROM ((void*)2)
+#define PRG_ANY ((void*)3)
+#define CHR_RAM ((void*)4)
+#define CHR_ROM ((void*)5)
+#define CHR_ANY ((void*)6)
+
+struct mapper_s
 {
    int number;
    const char *name;
-   void (*init)(void);
+   void (*init)(rom_t *cart);
    void (*vblank)(void);
    void (*hblank)(int scanline);
    void (*get_state)(void *state); // State is a 128 bytes buffer
    void (*set_state)(void *state); // State is a 128 bytes buffer
-   mem_read_handler_t *mem_read;
-   mem_write_handler_t *mem_write;
+   const mem_read_handler_t *mem_read;
+   const mem_write_handler_t *mem_write;
    apuext_t *sound_ext;
-};
-
-struct mmc_s
-{
-   mapintf_t *intf;
-   rom_t *cart;  /* link it back to the cart */
-   uint8 *prg, *chr;
-   uint8 prg_banks, chr_banks;
 };
 
 #define MMC_LASTBANK      -1
 
-extern void mmc_bankwram(int size, uint32 address, int bank);
-extern void mmc_bankvrom(int size, uint32 address, int bank);
-extern void mmc_bankrom(int size, uint32 address, int bank);
+#define mmc_bankvrom(a, b, c) mmc_bankchr(a, b, c, CHR_ANY)
+#define mmc_bankrom(a, b, c) mmc_bankprg(a, b, c, PRG_ROM)
 
-extern mmc_t *mmc_init(rom_t *rominfo);
-extern void mmc_refresh(void);
-extern void mmc_reset(void);
+extern mapper_t *mmc_init(rom_t *cart);
 extern void mmc_shutdown(void);
-
-extern mapintf_t *mmc_peek(int map_num);
-extern rom_t *mmc_getinfo(void);
-
-extern void mmc_getcontext(mmc_t *dest_mmc);
-extern void mmc_setcontext(mmc_t *src_mmc);
+extern void mmc_reset(void);
+extern void mmc_bankprg(int size, uint32 address, int bank, uint8 *base);
+extern void mmc_bankchr(int size, uint32 address, int bank, uint8 *base);
 
 #endif /* _NES_MMC_H_ */

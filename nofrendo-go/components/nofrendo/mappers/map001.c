@@ -17,10 +17,8 @@
 ** must bear this legend.
 **
 **
-** map001.c
-**
-** Mapper 1 interface
-** New implementation by ducalex
+** map001.c: MMC1 mapper interface
+** Implemented by ducalex
 **
 */
 
@@ -28,10 +26,10 @@
 #include <string.h>
 #include <mmc.h>
 
-static unsigned int regs[4];
-static unsigned int latch = 0;
-static unsigned int bitcount = 0;
-static unsigned int prg_banks = 0;
+static uint8 regs[4];
+static uint8 latch = 0;
+static int bitcount = 0;
+static int prg_banks = 0;
 
 // Shouldn't that be packed? (It wasn't packed in SNSS...)
 typedef struct
@@ -40,6 +38,7 @@ typedef struct
    uint8 bitcount;
    uint8 latch;
 } mapper1Data;
+
 
 static void update_mirror()
 {
@@ -150,9 +149,9 @@ static void map1_write(uint32 address, uint8 value)
    }
 }
 
-static void map1_init(void)
+static void map1_init(rom_t *cart)
 {
-   prg_banks = mmc_getinfo()->rom_banks;
+   prg_banks = cart->prg_rom_banks / 2;
    bitcount = 0;
    latch = 0;
 
@@ -186,7 +185,7 @@ static void map1_setstate(void *state)
    bitcount = ((mapper1Data*)state)->bitcount;
 }
 
-static mem_write_handler_t map1_memwrite[] =
+static const mem_write_handler_t map1_memwrite[] =
 {
    { 0x8000, 0xFFFF, map1_write },
    LAST_MEMORY_HANDLER
@@ -194,14 +193,14 @@ static mem_write_handler_t map1_memwrite[] =
 
 mapintf_t map1_intf =
 {
-   1,             /* mapper number */
-   "MMC1",        /* mapper name */
-   map1_init,     /* init routine */
-   NULL,          /* vblank callback */
-   NULL,          /* hblank callback */
-   map1_getstate, /* get state (snss) */
-   map1_setstate, /* set state (snss) */
-   NULL,          /* memory read structure */
-   map1_memwrite, /* memory write structure */
-   NULL           /* external sound device */
+   1,                /* mapper number */
+   "MMC1",           /* mapper name */
+   map1_init,        /* init routine */
+   NULL,             /* vblank callback */
+   NULL,             /* hblank callback */
+   map1_getstate,    /* get state (snss) */
+   map1_setstate,    /* set state (snss) */
+   NULL,             /* memory read structure */
+   map1_memwrite,    /* memory write structure */
+   NULL              /* external sound device */
 };

@@ -17,14 +17,15 @@
 ** must bear this legend.
 **
 **
-** nes_apu.h
+** nes/apu.h: Sound emulation header
 **
-** NES APU emulation header file
-** $Id: nes_apu.h,v 1.1 2001/04/27 12:54:40 neil Exp $
 */
 
 #ifndef _NES_APU_H_
 #define _NES_APU_H_
+
+// This is the worst case scenario, 48khz stereo running PAL
+#define  APU_SAMPLES_PER_FRAME ((48000 / 50 + 1) * 2)
 
 #define  APU_WRA0       0x4000
 #define  APU_WRA1       0x4001
@@ -191,11 +192,11 @@ typedef struct
    dmc_t dmc;
    uint8 control_reg;
 
-   uint32 sample_rate;
    uint32 samples_per_frame;
+   uint32 sample_rate;
    bool stereo;
 
-   int16 *buffer;
+   int16 buffer[APU_SAMPLES_PER_FRAME];
 
    float cycle_rate;
 
@@ -215,7 +216,7 @@ typedef struct
 } apu_t;
 
 /* Function prototypes */
-extern apu_t *apu_init(int region, int sample_rate, bool stereo);
+extern apu_t *apu_init(int sample_rate, bool stereo);
 extern void apu_refresh(void);
 extern void apu_reset(void);
 extern void apu_shutdown(void);
@@ -229,7 +230,7 @@ extern int  apu_getopt(apu_option_t n);
 extern void apu_setcontext(apu_t *src_apu);
 extern void apu_getcontext(apu_t *dest_apu);
 
-extern void apu_process(short *buffer, size_t num_samples, bool stereo);
+extern void apu_process(int16 *buffer, size_t num_samples, bool stereo);
 extern void apu_fc_advance(int cycles);
 
 extern uint8 apu_read(uint32 address);

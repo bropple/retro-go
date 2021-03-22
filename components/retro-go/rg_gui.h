@@ -2,7 +2,11 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+<<<<<<< HEAD
 #include <time.h>
+=======
+#include <stddef.h>
+>>>>>>> master
 
 typedef enum {
     RG_DIALOG_INIT,
@@ -17,7 +21,29 @@ typedef enum {
     RG_DIALOG_IGNORE,
     RG_DIALOG_SELECT,
     RG_DIALOG_CANCEL,
+    RG_DIALOG_UPDATE,
 } dialog_return_t;
+
+enum {
+    RG_TEXT_WRAP = (1 << 0),
+};
+
+typedef struct
+{
+    uint8_t type;
+    uint8_t width; // In prop fonts this must be set to avg char width
+    uint8_t height;
+    uint8_t chars;
+    char name[16];
+    uint8_t data[];
+} rg_font_t;
+
+typedef struct
+{
+    uint16_t width;
+    uint16_t height;
+    uint16_t bitmap[24];
+} rg_glyph_t;
 
 typedef struct {
     uint16_t box_background;
@@ -28,10 +54,11 @@ typedef struct {
 } dialog_theme_t;
 
 typedef struct {
+    uint8_t type;
     uint8_t width;
     uint8_t height;
     uint8_t points;
-    uint8_t type;
+    const rg_font_t *font;
 } font_info_t;
 
 typedef struct dialog_option_s dialog_option_t;
@@ -209,9 +236,9 @@ enum colors565
 
 void rg_gui_init(void);
 void rg_gui_set_theme(const dialog_theme_t *new_theme);
-void rg_gui_set_font_size(int points);
+void rg_gui_set_font_type(uint8_t type);
 font_info_t rg_gui_get_font_info(void);
-int  rg_gui_draw_text(int x, int y, int width, const char *text, uint16_t color, uint16_t color_bg);
+int  rg_gui_draw_text(int x, int y, int width, const char *text, uint16_t color_fg, uint16_t color_bg, uint32_t flags);
 void rg_gui_draw_rect(int x, int y, int width, int height, int border, uint16_t color);
 void rg_gui_draw_fill_rect(int x, int y, int width, int height, uint16_t color);
 void rg_gui_draw_battery(int x, int y);

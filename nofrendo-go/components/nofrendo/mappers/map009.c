@@ -17,10 +17,8 @@
 ** must bear this legend.
 **
 **
-** map9.c
+** map009.c: MMC2 mapper interface
 **
-** mapper 9 interface
-** $Id: map009.c,v 1.2 2001/04/27 14:37:11 neil Exp $
 */
 
 #include <nofrendo.h>
@@ -39,6 +37,7 @@ typedef struct
    unsigned char lastD000Write;
    unsigned char lastE000Write;
 } mapper9Data;
+
 
 /* Used when tile $FD/$FE is accessed */
 static void mmc9_latchfunc(uint32 address, uint8 value)
@@ -62,8 +61,6 @@ static void mmc9_latchfunc(uint32 address, uint8 value)
    }
 }
 
-/* mapper 9: MMC2 */
-/* MMC2: Punch-Out! */
 static void map9_write(uint32 address, uint8 value)
 {
    switch ((address & 0xF000) >> 12)
@@ -108,14 +105,14 @@ static void map9_write(uint32 address, uint8 value)
    }
 }
 
-static void map9_init(void)
+static void map9_init(rom_t *cart)
 {
    memset(regs, 0, sizeof(regs));
 
    mmc_bankrom(8, 0x8000, 0);
-   mmc_bankrom(8, 0xA000, (mmc_getinfo()->rom_banks * 2) - 3);
-   mmc_bankrom(8, 0xC000, (mmc_getinfo()->rom_banks * 2) - 2);
-   mmc_bankrom(8, 0xE000, (mmc_getinfo()->rom_banks * 2) - 1);
+   mmc_bankrom(8, 0xA000, (cart->prg_rom_banks) - 3);
+   mmc_bankrom(8, 0xC000, (cart->prg_rom_banks) - 2);
+   mmc_bankrom(8, 0xE000, (cart->prg_rom_banks) - 1);
 
    latch[0] = 0xFE;
    latch[1] = 0xFE;
@@ -143,7 +140,7 @@ static void map9_setstate(void *state)
    regs[3]  = ((mapper9Data*)state)->lastE000Write;
 }
 
-static mem_write_handler_t map9_memwrite[] =
+static const mem_write_handler_t map9_memwrite[] =
 {
    { 0x8000, 0xFFFF, map9_write },
    LAST_MEMORY_HANDLER
@@ -151,57 +148,14 @@ static mem_write_handler_t map9_memwrite[] =
 
 mapintf_t map9_intf =
 {
-   9, /* mapper number */
-   "MMC2", /* mapper name */
-   map9_init, /* init routine */
-   NULL, /* vblank callback */
-   NULL, /* hblank callback */
-   map9_getstate, /* get state (snss) */
-   map9_setstate, /* set state (snss) */
-   NULL, /* memory read structure */
-   map9_memwrite, /* memory write structure */
-   NULL /* external sound device */
+   9,                /* mapper number */
+   "MMC2",           /* mapper name */
+   map9_init,        /* init routine */
+   NULL,             /* vblank callback */
+   NULL,             /* hblank callback */
+   map9_getstate,    /* get state (snss) */
+   map9_setstate,    /* set state (snss) */
+   NULL,             /* memory read structure */
+   map9_memwrite,    /* memory write structure */
+   NULL              /* external sound device */
 };
-
-/*
-** $Log: map009.c,v $
-** Revision 1.2  2001/04/27 14:37:11  neil
-** wheeee
-**
-** Revision 1.1  2001/04/27 12:54:40  neil
-** blah
-**
-** Revision 1.1.1.1  2001/04/27 07:03:54  neil
-** initial
-**
-** Revision 1.1  2000/10/24 12:19:33  matt
-** changed directory structure
-**
-** Revision 1.9  2000/10/22 19:17:46  matt
-** mapper cleanups galore
-**
-** Revision 1.8  2000/10/22 15:03:14  matt
-** simplified mirroring
-**
-** Revision 1.7  2000/10/21 19:33:38  matt
-** many more cleanups
-**
-** Revision 1.6  2000/07/17 05:11:35  matt
-** minor update from making PPU code less filthy
-**
-** Revision 1.5  2000/07/15 23:52:19  matt
-** rounded out a bunch more mapper interfaces
-**
-** Revision 1.4  2000/07/10 05:29:03  matt
-** cleaned up some mirroring issues
-**
-** Revision 1.3  2000/07/06 02:48:43  matt
-** clearly labelled structure members
-**
-** Revision 1.2  2000/07/05 22:50:33  matt
-** fixed punchout -- works 100% now
-**
-** Revision 1.1  2000/07/05 05:05:18  matt
-** initial revision
-**
-*/

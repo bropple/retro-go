@@ -17,10 +17,8 @@
 ** must bear this legend.
 **
 **
-** nes_input.c
+** nes/input.c: Input emulation (joypads)
 **
-** Event handling system routines
-** $Id: nes_input.c,v 1.2 2001/04/27 14:37:11 neil Exp $
 */
 
 #include <nofrendo.h>
@@ -29,7 +27,7 @@
 static nesinput_t nes_inputs[INP_TYPE_MAX];
 static int strobe = 0;
 
-IRAM_ATTR void input_write(uint32_t address, uint8_t value)
+IRAM_ATTR void input_write(uint32 address, uint8 value)
 {
     if (address != INP_REG_JOY0)
         return;
@@ -45,9 +43,9 @@ IRAM_ATTR void input_write(uint32_t address, uint8_t value)
     strobe = value;
 }
 
-IRAM_ATTR uint8_t input_read(uint32_t address)
+IRAM_ATTR uint8 input_read(uint32 address)
 {
-    uint8_t retval = 0, value = 0;
+    uint8 retval = 0, value = 0;
 
     if (address == INP_REG_JOY0)
     {
@@ -101,7 +99,7 @@ void input_disconnect(nesinput_type_t input)
     nes_inputs[input].connected = false;
 }
 
-void input_update(nesinput_type_t input, uint8_t state)
+void input_update(nesinput_type_t input, uint8 state)
 {
     ASSERT(input < INP_TYPE_MAX);
 

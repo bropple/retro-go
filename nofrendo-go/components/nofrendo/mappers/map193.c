@@ -17,16 +17,15 @@
 ** must bear this legend.
 **
 **
-** map193.c
-**
-** Mapper 193 interface (War in the Gulf)
-** Implementation by ducalex
+** map193.c: Mapper 193 interface (War in the Gulf)
+** Implemented by ducalex
 **
 */
 
 #include <nofrendo.h>
 #include <mmc.h>
 #include <nes.h>
+
 
 static void map193_reg_write(uint32 address, uint8 value)
 {
@@ -50,14 +49,16 @@ static void map193_reg_write(uint32 address, uint8 value)
    }
 }
 
-static void map193_init(void)
+static void map193_init(rom_t *cart)
 {
+   UNUSED(cart);
+
    mmc_bankrom(8, 0xA000, 0xD);
    mmc_bankrom(8, 0xC000, 0xE);
    mmc_bankrom(8, 0xE000, 0xF);
 }
 
-static mem_write_handler_t map193_memwrite[] =
+static const mem_write_handler_t map193_memwrite[] =
 {
    {0x6000, 0x6004, map193_reg_write},
    LAST_MEMORY_HANDLER
@@ -65,14 +66,14 @@ static mem_write_handler_t map193_memwrite[] =
 
 mapintf_t map193_intf =
 {
-   193,             /* mapper number */
-   "Mapper 193",    /* mapper name */
-   map193_init,     /* init routine */
-   NULL,            /* vblank callback */
-   NULL,            /* hblank callback */
-   NULL,            /* get state (snss) */
-   NULL,            /* set state (snss) */
-   NULL,            /* memory read structure */
-   map193_memwrite, /* memory write structure */
-   NULL             /* external sound device */
+   193,              /* mapper number */
+   "Mapper 193",     /* mapper name */
+   map193_init,      /* init routine */
+   NULL,             /* vblank callback */
+   NULL,             /* hblank callback */
+   NULL,             /* get state (snss) */
+   NULL,             /* set state (snss) */
+   NULL,             /* memory read structure */
+   map193_memwrite,  /* memory write structure */
+   NULL              /* external sound device */
 };

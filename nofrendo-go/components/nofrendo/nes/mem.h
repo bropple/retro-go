@@ -17,10 +17,8 @@
 ** must bear this legend.
 **
 **
-** nes_mem.h
+** nes/mem.h: Memory emulation header
 **
-** Memory related functions
-** by ducalex
 */
 
 #ifndef _NES_MEM_H_
@@ -58,8 +56,6 @@ typedef struct
    void (*write_func)(uint32 address, uint8 value);
 } mem_write_handler_t;
 
-typedef struct mapintf_s mapintf_t;
-
 typedef struct
 {
    // System RAM
@@ -75,16 +71,13 @@ typedef struct
    /* Special memory handlers */
    mem_read_handler_t read_handlers[MEM_HANDLERS_MAX];
    mem_write_handler_t write_handlers[MEM_HANDLERS_MAX];
-
-   mapintf_t *mapper;
 } mem_t;
 
 extern mem_t *mem_create(void);
 extern void mem_shutdown(void);
 extern void mem_reset(void);
-extern void mem_setmapper(mapintf_t *intf);
-extern void mem_setpage(uint16 page, uint8 *ptr);
-extern uint8 *mem_getpage(uint16 page);
+extern void mem_setpage(uint32 page, uint8 *ptr);
+extern uint8 *mem_getpage(uint32 page);
 
 extern uint8 mem_getbyte(uint32 address);
 extern uint32 mem_getword(uint32 address);

@@ -17,10 +17,8 @@
 ** must bear this legend.
 **
 **
-** nes_ppu.c
+** nes/ppu.c: Graphics emulation (PPU)
 **
-** NES PPU emulation
-** $Id: nes_ppu.c,v 1.2 2001/04/27 14:37:11 neil Exp $
 */
 
 #include <nofrendo.h>
@@ -172,7 +170,7 @@ INLINE void ppu_oamdma(uint8 value)
 
    /* make the CPU spin for DMA cycles */
    nes6502_burn(513);
-   nes6502_release();
+   // nes6502_release();
 }
 
 /* Read from $2000-$2007 */
@@ -206,7 +204,7 @@ IRAM_ATTR uint8 ppu_read(uint32 address)
       {
          ppu.vdata_latch = 0xFF;
          MESSAGE_DEBUG("VRAM read at $%04X, scanline %d\n",
-                        ppu.vaddr, nes_getptr()->scanline);
+                        ppu.vaddr, NES_CURRENT_SCANLINE);
       }
       else
       {
@@ -323,7 +321,7 @@ IRAM_ATTR void ppu_write(uint32 address, uint8 value)
          if ((ppu.bg_on || ppu.obj_on) && !ppu.vram_accessible)
          {
             MESSAGE_DEBUG("VRAM write to $%04X, scanline %d\n",
-                           ppu.vaddr, nes_getptr()->scanline);
+                           ppu.vaddr, NES_CURRENT_SCANLINE);
             PPU_MEM_WRITE(ppu.vaddr, 0xFF); /* corrupt */
          }
          else
@@ -758,9 +756,10 @@ IRAM_ATTR void ppu_scanline(uint8 *bmp, int scanline, bool draw_flag)
    {
       ppu.stat |= PPU_STATF_VBLANK;
       ppu.vram_accessible = true;
+      ppu.last_scanline = NES_SCANLINES - 1;
    }
    // End of frame
-   else if (scanline == ppu.scanlines_per_frame - 1)
+   else if (scanline == ppu.last_scanline)
    {
       ppu.stat &= ~PPU_STATF_VBLANK;
       ppu.strikeflag = false;
@@ -769,17 +768,6 @@ IRAM_ATTR void ppu_scanline(uint8 *bmp, int scanline, bool draw_flag)
    }
 }
 
-bool ppu_checkzapperhit(uint8 *bmp, int x, int y)
-{
-   uint8 pixel = *NES_SCREEN_GETPTR(bmp, x, y) & 0x3F;
-
-   if (0x20 == pixel || 0x30 == pixel)
-      return true;
-
-   return false;
-}
-
-/* reset state of ppu */
 void ppu_reset()
 {
    memset(ppu.nametab, 0, sizeof(ppu.nametab));
@@ -792,16 +780,14 @@ void ppu_reset()
    ppu.vaddr = ppu.vaddr_latch = 0x2000;
    ppu.oam_addr = 0;
    ppu.tile_xofs = 0;
-
    ppu.latch = 0;
    ppu.vram_accessible = true;
+   ppu.last_scanline = NES_SCANLINES - 1;
 }
 
-ppu_t *ppu_init(int region)
+ppu_t *ppu_init(void)
 {
    memset(&ppu, 0, sizeof(ppu_t));
-
-   ppu.scanlines_per_frame = (region == NES_PAL) ? NES_SCANLINES_PAL : NES_SCANLINES_NTSC;
 
    ppu_setopt(PPU_DRAW_BACKGROUND, true);
    ppu_setopt(PPU_DRAW_SPRITES, true);
@@ -811,7 +797,7 @@ ppu_t *ppu_init(int region)
    return &ppu;
 }
 
-void ppu_shutdown()
+void ppu_shutdown(void)
 {
    //
 }

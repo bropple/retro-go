@@ -12,11 +12,6 @@
 #define AUDIO_SAMPLE_RATE   (32000)
 #define AUDIO_BUFFER_LENGTH (AUDIO_SAMPLE_RATE / 50 + 1)
 
-#define SETTING_AUTOCROP "autocrop"
-
-static uint8_t *romData;
-static uint32_t romSize;
-
 static uint16_t myPalette[64];
 static rg_video_frame_t frames[2];
 static rg_video_frame_t *currentUpdate = &frames[0];
@@ -25,7 +20,7 @@ static gamepad_state_t joystick1;
 static gamepad_state_t *localJoystick = &joystick1;
 
 static bool overscan = true;
-static long autocrop = false;
+static long autocrop = 0;
 
 static bool fullFrame = 0;
 static long frameTime = 0;
@@ -39,6 +34,12 @@ static gamepad_state_t joystick2;
 
 static bool netplay = false;
 #endif
+
+static const char *SETTING_AUTOCROP = "autocrop";
+static const char *SETTING_OVERSCAN = "overscan";
+static const char *SETTING_PALETTE = "palette";
+static const char *SETTING_REGION = "region";
+static const char *SETTING_SPRITELIMIT = "spritelimit";
 // --- MAIN
 
 
@@ -61,7 +62,7 @@ static void netplay_handler(netplay_event_t event, void *arg)
             // displayScalingMode = RG_DISPLAY_SCALING_FILL;
             // displayFilterMode = RG_DISPLAY_FILTER_NONE;
             // forceVideoRefresh = true;
-            nes_reset(ZERO_RESET);
+            nes_reset(true);
         }
 
         netplay = new_netplay;
@@ -103,7 +104,7 @@ static bool load_state_handler(char *pathName)
 {
     if (state_load(pathName) < 0)
     {
-        nes_reset(HARD_RESET);
+        nes_reset(true);
         return false;
     }
     return true;
@@ -111,31 +112,33 @@ static bool load_state_handler(char *pathName)
 
 static bool reset_handler(bool hard)
 {
-    nes_reset(hard ? HARD_RESET : SOFT_RESET);
+    nes_reset(hard);
     return true;
 }
 
 
 static dialog_return_t sprite_limit_cb(dialog_option_t *option, dialog_event_t event)
 {
-    int val = rg_settings_SpriteLimit_get();
+    bool spritelimit = ppu_getopt(PPU_LIMIT_SPRITES);
 
-    if (event == RG_DIALOG_PREV || event == RG_DIALOG_NEXT) {
-        val = val ? 0 : 1;
-        rg_settings_SpriteLimit_set(val);
-        ppu_setopt(PPU_LIMIT_SPRITES, val);
+    if (event == RG_DIALOG_PREV || event == RG_DIALOG_NEXT)
+    {
+        spritelimit = !spritelimit;
+        rg_settings_set_app_int32(SETTING_SPRITELIMIT, spritelimit);
+        ppu_setopt(PPU_LIMIT_SPRITES, spritelimit);
     }
 
-    strcpy(option->value, val ? "On " : "Off");
+    strcpy(option->value, spritelimit ? "On " : "Off");
 
     return RG_DIALOG_IGNORE;
 }
 
 static dialog_return_t overscan_update_cb(dialog_option_t *option, dialog_event_t event)
 {
-    if (event == RG_DIALOG_PREV || event == RG_DIALOG_NEXT) {
+    if (event == RG_DIALOG_PREV || event == RG_DIALOG_NEXT)
+    {
         overscan = !overscan;
-        rg_settings_DisplayOverscan_set(overscan);
+        rg_settings_set_app_int32(SETTING_OVERSCAN, overscan);
     }
 
     strcpy(option->value, overscan ? "Auto" : "Off ");
@@ -151,9 +154,10 @@ static dialog_return_t autocrop_update_cb(dialog_option_t *option, dialog_event_
     if (event == RG_DIALOG_PREV) val = val > 0 ? val - 1 : max;
     if (event == RG_DIALOG_NEXT) val = val < max ? val + 1 : 0;
 
-    if (event == RG_DIALOG_PREV || event == RG_DIALOG_NEXT) {
+    if (val != autocrop)
+    {
+        rg_settings_set_app_int32(SETTING_AUTOCROP, val);
         autocrop = val;
-        rg_settings_app_int32_set(SETTING_AUTOCROP, autocrop);
     }
 
     if (val == 0) strcpy(option->value, "Never ");
@@ -165,26 +169,28 @@ static dialog_return_t autocrop_update_cb(dialog_option_t *option, dialog_event_
 
 static dialog_return_t region_update_cb(dialog_option_t *option, dialog_event_t event)
 {
-    int val = rg_settings_Region_get();
+    int val = rg_settings_get_app_int32(SETTING_REGION, 0);
     int max = 2;
 
     if (event == RG_DIALOG_PREV) val = val > 0 ? val - 1 : max;
     if (event == RG_DIALOG_NEXT) val = val < max ? val + 1 : 0;
 
-    if (event == RG_DIALOG_PREV || event == RG_DIALOG_NEXT) {
-        rg_settings_Region_set(val);
+    if (event == RG_DIALOG_PREV || event == RG_DIALOG_NEXT)
+    {
+        rg_settings_set_app_int32(SETTING_REGION, val);
     }
 
-    if (val == EMU_REGION_AUTO) strcpy(option->value, "Auto");
-    if (val == EMU_REGION_NTSC) strcpy(option->value, "NTSC");
-    if (val == EMU_REGION_PAL)  strcpy(option->value, "PAL ");
+    if (val == NES_AUTO) strcpy(option->value, "Auto");
+    if (val == NES_NTSC) strcpy(option->value, "NTSC");
+    if (val == NES_PAL)  strcpy(option->value, "PAL ");
 
     return RG_DIALOG_IGNORE;
 }
 
 static dialog_return_t advanced_settings_cb(dialog_option_t *option, dialog_event_t event)
 {
-    if (event == RG_DIALOG_ENTER) {
+    if (event == RG_DIALOG_ENTER)
+    {
         dialog_option_t options[] = {
             {1, "Region      ", "Auto ", 1, &region_update_cb},
             {2, "Overscan    ", "Auto ", 1, &overscan_update_cb},
@@ -205,8 +211,9 @@ static dialog_return_t palette_update_cb(dialog_option_t *option, dialog_event_t
     if (event == RG_DIALOG_PREV) pal = pal > 0 ? pal - 1 : max;
     if (event == RG_DIALOG_NEXT) pal = pal < max ? pal + 1 : 0;
 
-    if (event == RG_DIALOG_PREV || event == RG_DIALOG_NEXT) {
-        rg_settings_Palette_set(pal);
+    if (pal != ppu_getopt(PPU_PALETTE_RGB))
+    {
+        rg_settings_set_app_int32(SETTING_PALETTE, pal);
         ppu_setopt(PPU_PALETTE_RGB, pal);
         rg_display_queue_update(currentUpdate, NULL);
         rg_display_queue_update(currentUpdate, NULL);
@@ -217,16 +224,6 @@ static dialog_return_t palette_update_cb(dialog_option_t *option, dialog_event_t
 }
 
 
-uint8_t *osd_getromdata(void)
-{
-    return romData;
-}
-
-uint32_t osd_getromsize(void)
-{
-    return romSize;
-}
-
 void osd_loadstate()
 {
     if (app->startAction == EMU_START_ACTION_RESUME)
@@ -234,10 +231,10 @@ void osd_loadstate()
         rg_emu_load_state(0);
     }
 
-    ppu_setopt(PPU_LIMIT_SPRITES, rg_settings_SpriteLimit_get());
-    ppu_setopt(PPU_PALETTE_RGB, rg_settings_Palette_get());
-    overscan = rg_settings_DisplayOverscan_get();
-    autocrop = rg_settings_app_int32_get(SETTING_AUTOCROP, 0);
+    ppu_setopt(PPU_LIMIT_SPRITES, rg_settings_get_app_int32(SETTING_SPRITELIMIT, 1));
+    ppu_setopt(PPU_PALETTE_RGB, rg_settings_get_app_int32(SETTING_PALETTE, 0));
+    overscan = rg_settings_get_app_int32(SETTING_OVERSCAN, 1);
+    autocrop = rg_settings_get_app_int32(SETTING_AUTOCROP, 0);
 
     nes = nes_getptr();
     frameTime = get_frame_time(nes->refresh_rate);
@@ -311,7 +308,7 @@ void osd_setpalette(rgb_t *pal)
         uint16_t c = (pal[i].b >> 3) + ((pal[i].g >> 2) << 5) + ((pal[i].r >> 3) << 11);
         myPalette[i] = (c >> 8) | ((c & 0xff) << 8);
     }
-    rg_display_set_config_param(changed, 1);
+    rg_display_reset_config();
 }
 
 void osd_blitscreen(uint8 *bmp)
@@ -328,7 +325,7 @@ void osd_blitscreen(uint8 *bmp)
 
     rg_video_frame_t *previousUpdate = &frames[currentUpdate == &frames[0]];
 
-    fullFrame = rg_display_queue_update(currentUpdate, previousUpdate) == RG_SCREEN_UPDATE_FULL;
+    fullFrame = rg_display_queue_update(currentUpdate, previousUpdate) == RG_UPDATE_FULL;
 
     currentUpdate = previousUpdate;
 }
@@ -339,11 +336,11 @@ void osd_getinput(void)
 
     *localJoystick = rg_input_read_gamepad();
 
-    if (localJoystick->values[GAMEPAD_KEY_MENU])
+    if (*localJoystick & GAMEPAD_KEY_MENU)
     {
         rg_gui_game_menu();
     }
-    else if (localJoystick->values[GAMEPAD_KEY_VOLUME])
+    else if (*localJoystick & GAMEPAD_KEY_VOLUME)
     {
         dialog_option_t options[] = {
             {100, "Palette", "Default", 1, &palette_update_cb},
@@ -356,27 +353,27 @@ void osd_getinput(void)
     if (netplay)
     {
         rg_netplay_sync(localJoystick, remoteJoystick, sizeof(gamepad_state_t));
-        if (joystick2.values[GAMEPAD_KEY_START])  input |= INP_PAD_START;
-        if (joystick2.values[GAMEPAD_KEY_SELECT]) input |= INP_PAD_SELECT;
-        if (joystick2.values[GAMEPAD_KEY_UP])     input |= INP_PAD_UP;
-        if (joystick2.values[GAMEPAD_KEY_RIGHT])  input |= INP_PAD_RIGHT;
-        if (joystick2.values[GAMEPAD_KEY_DOWN])   input |= INP_PAD_DOWN;
-        if (joystick2.values[GAMEPAD_KEY_LEFT])   input |= INP_PAD_LEFT;
-        if (joystick2.values[GAMEPAD_KEY_A])      input |= INP_PAD_A;
-        if (joystick2.values[GAMEPAD_KEY_B])      input |= INP_PAD_B;
+        if (joystick2 & GAMEPAD_KEY_START)  input |= INP_PAD_START;
+        if (joystick2 & GAMEPAD_KEY_SELECT) input |= INP_PAD_SELECT;
+        if (joystick2 & GAMEPAD_KEY_UP)     input |= INP_PAD_UP;
+        if (joystick2 & GAMEPAD_KEY_RIGHT)  input |= INP_PAD_RIGHT;
+        if (joystick2 & GAMEPAD_KEY_DOWN)   input |= INP_PAD_DOWN;
+        if (joystick2 & GAMEPAD_KEY_LEFT)   input |= INP_PAD_LEFT;
+        if (joystick2 & GAMEPAD_KEY_A)      input |= INP_PAD_A;
+        if (joystick2 & GAMEPAD_KEY_B)      input |= INP_PAD_B;
         input_update(INP_JOYPAD1, input);
         input = 0;
     }
 #endif
 
-    if (joystick1.values[GAMEPAD_KEY_START])  input |= INP_PAD_START;
-    if (joystick1.values[GAMEPAD_KEY_SELECT]) input |= INP_PAD_SELECT;
-    if (joystick1.values[GAMEPAD_KEY_UP])     input |= INP_PAD_UP;
-    if (joystick1.values[GAMEPAD_KEY_RIGHT])  input |= INP_PAD_RIGHT;
-    if (joystick1.values[GAMEPAD_KEY_DOWN])   input |= INP_PAD_DOWN;
-    if (joystick1.values[GAMEPAD_KEY_LEFT])   input |= INP_PAD_LEFT;
-    if (joystick1.values[GAMEPAD_KEY_A])      input |= INP_PAD_A;
-    if (joystick1.values[GAMEPAD_KEY_B])      input |= INP_PAD_B;
+    if (joystick1 & GAMEPAD_KEY_START)  input |= INP_PAD_START;
+    if (joystick1 & GAMEPAD_KEY_SELECT) input |= INP_PAD_SELECT;
+    if (joystick1 & GAMEPAD_KEY_UP)     input |= INP_PAD_UP;
+    if (joystick1 & GAMEPAD_KEY_RIGHT)  input |= INP_PAD_RIGHT;
+    if (joystick1 & GAMEPAD_KEY_DOWN)   input |= INP_PAD_DOWN;
+    if (joystick1 & GAMEPAD_KEY_LEFT)   input |= INP_PAD_LEFT;
+    if (joystick1 & GAMEPAD_KEY_A)      input |= INP_PAD_A;
+    if (joystick1 & GAMEPAD_KEY_B)      input |= INP_PAD_B;
 
     input_update(INP_JOYPAD0, input);
 }
@@ -401,46 +398,21 @@ void app_main(void)
     frames[0].palette = myPalette;
     frames[1] = frames[0];
 
-    // Load ROM
-    MESSAGE_INFO("Loading rom file: '%s'\n", app->romPath);
+    osd_init();
 
-    FILE *fp;
-    if ((fp = fopen(app->romPath, "rb")))
+    int region = rg_settings_get_app_int32(SETTING_REGION, NES_AUTO);
+
+    if (!nes_init(region, AUDIO_SAMPLE_RATE, true))
     {
-        fseek(fp, 0, SEEK_END);
-        romSize = ftell(fp);
-        fseek(fp, 0, SEEK_SET);
-        romData = rg_alloc(romSize, MEM_SLOW);
-        romSize *= fread(romData, romSize, 1, fp);
-        fclose(fp);
+        RG_PANIC("Init failed.");
     }
 
-    if (romSize < 16)
+    if (!nes_insertcart(app->romPath))
     {
-        RG_PANIC("ROM file loading failed!");
+        RG_PANIC("Unsupported ROM.");
     }
 
-    MESSAGE_INFO("Loading complete! romSize=%d\n", romSize);
+    nes_emulate();
 
-    int region, ret;
-
-    switch (rg_settings_Region_get())
-    {
-        case EMU_REGION_AUTO: region = NES_AUTO; break;
-        case EMU_REGION_NTSC: region = NES_NTSC; break;
-        case EMU_REGION_PAL:  region = NES_PAL;  break;
-        default: region = NES_NTSC; break;
-    }
-
-    MESSAGE_INFO("Nofrendo start!\n");
-
-    ret = nofrendo_start(app->romPath, region, AUDIO_SAMPLE_RATE, true);
-
-    switch (ret)
-    {
-        case -1: RG_PANIC("Init failed.");
-        case -2: RG_PANIC("Unsupported ROM.");
-        case -3: RG_PANIC("ROM Loading failed.");
-        default: RG_PANIC("Nofrendo died!");
-    }
+    RG_PANIC("Nofrendo died!");
 }

@@ -17,10 +17,8 @@
 ** must bear this legend.
 **
 **
-** nes_rom.c
+** nes/rom.c: ROM loader
 **
-** NES ROM loading/saving related functions
-** $Id: nes_rom.c,v 1.2 2001/04/27 14:37:11 neil Exp $
 */
 
 #include <nofrendo.h>
@@ -32,26 +30,22 @@
 #include "ppu.h"
 #include "nes.h"
 
+static rom_t rom;
+
 #ifdef USE_SRAM_FILE
 
 /* Save battery-backed RAM */
-static void rom_savesram(rom_t *rominfo)
+static void rom_savesram(void)
 {
-   FILE *fp;
    char fn[PATH_MAX + 1];
+   FILE *fp;
 
-   ASSERT(rominfo);
-
-   if (rominfo->flags & ROM_FLAG_BATTERY)
+   if ((rom.flags & ROM_FLAG_BATTERY) && rom.prg_ram_banks > 0)
    {
-      strncpy(fn, rominfo->filename, PATH_MAX + 1);
-      char *ext = strrchr(fn, '.');
-      if (ext)
-         strcpy(ext, ".sav");
-
+      snprintf(fn, PATH_MAX, "%s.sav", rom.filename);
       if ((fp = fopen(fn, "wb")))
       {
-         fwrite(rominfo->sram, SRAM_BANK_LENGTH, rominfo->sram_banks, fp);
+         fwrite(rom.prg_ram, ROM_PRG_BANK_SIZE, rom.prg_ram_banks, fp);
          fclose(fp);
          MESSAGE_INFO("ROM: Wrote battery RAM to %s.\n", fn);
       }
@@ -59,23 +53,17 @@ static void rom_savesram(rom_t *rominfo)
 }
 
 /* Load battery-backed RAM from disk */
-static void rom_loadsram(rom_t *rominfo)
+static void rom_loadsram(void)
 {
-   FILE *fp;
    char fn[PATH_MAX + 1];
+   FILE *fp;
 
-   ASSERT(rominfo);
-
-   if (rominfo->flags & ROM_FLAG_BATTERY)
+   if ((rom.flags & ROM_FLAG_BATTERY) && rom.prg_ram_banks > 0)
    {
-      strncpy(fn, rominfo->filename, PATH_MAX);
-      char *ext = strrchr(fn, '.');
-      if (ext)
-         strcpy(ext, ".sav");
-
+      snprintf(fn, PATH_MAX, "%s.sav", rom.filename);
       if ((fp = fopen(fn, "rb")))
       {
-         fread(rominfo->sram, SRAM_BANK_LENGTH, rominfo->sram_banks, fp);
+         fread(rom.prg_ram, ROM_PRG_BANK_SIZE, rom.prg_ram_banks, fp);
          fclose(fp);
          MESSAGE_INFO("ROM: Read battery RAM from %s.\n", fn);
       }
@@ -83,101 +71,175 @@ static void rom_loadsram(rom_t *rominfo)
 }
 #endif
 
-/* Load a ROM image into memory */
-rom_t *rom_load(const char *filename)
+/* Load a ROM from a memory buffer */
+rom_t *rom_loadmem(uint8 *data, size_t size)
 {
-   rom_t *rominfo = calloc(sizeof(rom_t), 1);
-   uint8_t *rom_ptr = osd_getromdata();
-   size_t rom_size = osd_getromsize();
+   if (!data || size < 16)
+      return NULL;
 
-   if (!rominfo || !rom_ptr)
-      goto _fail;
-
-   strncpy(rominfo->filename, filename, sizeof(rominfo->filename) - 1);
-
-   MESSAGE_INFO("ROM: Loading '%s'\n", rominfo->filename);
-   MESSAGE_INFO("ROM: Size:   %d\n", rom_size);
-
-   /* Read in the header */
-   memcpy(&rominfo->header, rom_ptr, 16);
-   rom_ptr += 16;
-
-   if (memcmp(rominfo->header.ines_magic, ROM_INES_MAGIC, 4))
+   if (!memcmp(data, ROM_INES_MAGIC, 4))
    {
-      MESSAGE_ERROR("ROM: %s is not a valid ROM image\n", rominfo->filename);
-      goto _fail;
+      inesheader_t *header = (inesheader_t *)data;
+
+      MESSAGE_INFO("ROM: Found iNES file of size %d.\n", size);
+
+      memset(&rom, 0, sizeof(rom_t));
+      rom.data_ptr = data;
+      rom.data_len = size;
+
+      rom.prg_rom = data + sizeof(inesheader_t);
+
+      if (header->rom_type & ROM_FLAG_TRAINER)
+      {
+         MESSAGE_INFO("ROM: Trainer found and skipped.\n");
+         rom.prg_rom += TRAINER_LENGTH;
+      }
+
+      rom.checksum = crc32_le(0, rom.prg_rom, size - (rom.prg_rom - data));
+      rom.prg_rom_banks = header->prg_banks * 2;
+      rom.chr_rom_banks = header->chr_banks;
+      rom.prg_ram_banks = 1; // 8KB. Not specified by iNES
+      rom.chr_ram_banks = 1; // 8KB. Not specified by iNES
+      rom.flags = header->rom_type;
+      rom.mapper_number = header->rom_type >> 4;
+
+      if (header->reserved2 == 0)
+      {
+         // https://wiki.nesdev.com/w/index.php/INES
+         // A general rule of thumb: if the last 4 bytes are not all zero, and the header is
+         // not marked for NES 2.0 format, an emulator should either mask off the upper 4 bits
+         // of the mapper number or simply refuse to load the ROM.
+         rom.mapper_number |= (header->mapper_hinybble & 0xF0);
+      }
+
+      rom.prg_ram = malloc(rom.prg_ram_banks * ROM_PRG_BANK_SIZE);
+      rom.chr_ram = malloc(rom.chr_ram_banks * ROM_CHR_BANK_SIZE);
+
+      if (!rom.prg_ram || !rom.chr_ram)
+      {
+         MESSAGE_ERROR("ROM: Memory allocation failed!\n");
+         return NULL;
+      }
+
+      if (rom.chr_rom_banks > 0)
+      {
+         rom.chr_rom = rom.prg_rom + (rom.prg_rom_banks * ROM_PRG_BANK_SIZE);
+      }
+
+      MESSAGE_INFO("ROM: CRC32:  %08X\n", rom.checksum);
+      MESSAGE_INFO("ROM: Mapper: %d, PRG:%dK, CHR:%dK, Flags: %c%c%c%c\n",
+                  rom.mapper_number,
+                  rom.prg_rom_banks * 8, rom.chr_rom_banks * 8,
+                  (rom.flags & ROM_FLAG_VERTICAL) ? 'V' : 'H',
+                  (rom.flags & ROM_FLAG_BATTERY) ? 'B' : '-',
+                  (rom.flags & ROM_FLAG_TRAINER) ? 'T' : '-',
+                  (rom.flags & ROM_FLAG_FOURSCREEN) ? '4' : '-');
+
+      strncpy(rom.filename, "filename.nes", PATH_MAX);
+      return &rom;
+   }
+   else if (!memcmp(data, FDS_DISK_MAGIC, 15) || !memcmp(data + 16, FDS_DISK_MAGIC, 15))
+   {
+      MESSAGE_INFO("ROM: Found FDS file of size %d.\n", size);
+
+      memset(&rom, 0, sizeof(rom_t));
+      rom.data_ptr = data;
+      rom.data_len = size;
+
+      rom.prg_ram_banks = 4;
+      rom.chr_ram_banks = 1;
+      rom.prg_rom_banks = 1;
+
+      rom.prg_ram = malloc(0x8000 + 0x2000);
+      rom.chr_ram = malloc(0x2000);
+      rom.prg_rom = rom.prg_ram + 0x8000;
+
+      if (!rom.prg_ram || !rom.chr_ram)
+      {
+         MESSAGE_ERROR("ROM: Memory allocation failed!\n");
+         return NULL;
+      }
+
+      rom.checksum = crc32_le(0, rom.data_ptr, rom.data_len);
+      rom.mapper_number = 20;
+
+      MESSAGE_INFO("ROM: CRC32:  %08X\n", rom.checksum);
+
+      strncpy(rom.filename, "filename.fds", PATH_MAX);
+      return &rom;
    }
 
-   rominfo->checksum = crc32_le(0, rom_ptr, rom_size - 16);
-   MESSAGE_INFO("ROM: CRC32:  %08X\n", rominfo->checksum);
+   MESSAGE_ERROR("ROM: File is not a valid NES image!\n");
+   return NULL;
+}
 
-   /* Assumed values */
-   rominfo->sram_banks = 8; /* 1kB banks, so 8KB */
-   rominfo->vram_banks = 1; /* 8kB banks, so 8KB */
+/* Load a ROM from file */
+rom_t *rom_loadfile(const char *filename)
+{
+   uint8 *data = NULL;
+   long size = 0;
 
-   /* Valid values */
-   rominfo->rom_banks = rominfo->header.rom_banks;
-   rominfo->vrom_banks = rominfo->header.vrom_banks;
-   rominfo->flags = rominfo->header.rom_type;
-   rominfo->mapper_number = rominfo->header.rom_type >> 4;
+   if (!filename)
+      return NULL;
 
-   if (rominfo->header.reserved2 == 0)
+   FILE *fp = fopen(filename, "rb");
+   if (!fp)
    {
-      // https://wiki.nesdev.com/w/index.php/INES
-      // A general rule of thumb: if the last 4 bytes are not all zero, and the header is
-      // not marked for NES 2.0 format, an emulator should either mask off the upper 4 bits
-      // of the mapper number or simply refuse to load the ROM.
-
-      rominfo->mapper_number |= (rominfo->header.mapper_hinybble & 0xF0);
+      MESSAGE_ERROR("ROM: Unable to open file '%s'\n", filename);
+      return NULL;
    }
 
-   MESSAGE_INFO("ROM: Header: Mapper:%d, PRG:%dK, CHR:%dK, Mirror:%c, Flags: %c%c%c\n",
-                rominfo->mapper_number,
-                rominfo->rom_banks * 16, rominfo->vrom_banks * 8,
-                (rominfo->flags & ROM_FLAG_VERTICAL) ? 'V' : 'H',
-                (rominfo->flags & ROM_FLAG_BATTERY) ? 'B' : '-',
-                (rominfo->flags & ROM_FLAG_TRAINER) ? 'T' : '-',
-                (rominfo->flags & ROM_FLAG_FOURSCREEN) ? '4' : '-');
+   MESSAGE_INFO("ROM: Loading file '%s'\n", filename);
 
-   if (rominfo->flags & ROM_FLAG_TRAINER)
+   fseek(fp, 0, SEEK_END);
+   size = ftell(fp);
+   fseek(fp, 0, SEEK_SET);
+
+   if (size < 16 || size > 0x200000)
    {
-      memcpy(rominfo->sram + TRAINER_OFFSET, rom_ptr, TRAINER_LENGTH);
-      rom_ptr += TRAINER_LENGTH;
-      MESSAGE_INFO("ROM: Read in trainer at $7000\n");
+      MESSAGE_ERROR("ROM: File size error\n");
+   }
+   else if ((data = malloc(size)) == NULL)
+   {
+      MESSAGE_ERROR("ROM: Memory allocation failed\n");
+   }
+   else if (fread(data, size, 1, fp) != 1)
+   {
+      MESSAGE_ERROR("ROM: Read error\n");
+   }
+   else if (rom_loadmem(data, size) == NULL)
+   {
+      MESSAGE_ERROR("ROM: Load error\n");
+   }
+   else
+   {
+      fclose(fp);
+      strncpy(rom.filename, filename, PATH_MAX);
+      rom.flags |= ROM_FLAG_FREE_DATA;
+      #ifdef USE_SRAM_FILE
+         rom_loadsram();
+      #endif
+      return &rom;
    }
 
-   rominfo->rom = rom_ptr;
-   rom_ptr += ROM_BANK_LENGTH * rominfo->rom_banks;
-
-   if (rominfo->vrom_banks)
-   {
-      rominfo->vrom = rom_ptr;
-      rom_ptr += VROM_BANK_LENGTH * rominfo->vrom_banks;
-   }
-
-#ifdef USE_SRAM_FILE
-   rom_loadsram(rominfo);
-#endif
-
-   MESSAGE_INFO("ROM: Loading done.\n");
-
-   return rominfo;
-
-_fail:
-   MESSAGE_ERROR("ROM: Loading failed.\n");
-   rom_free(rominfo);
+   fclose(fp);
+   free(data);
    return NULL;
 }
 
 /* Free a ROM */
-void rom_free(rom_t *rominfo)
+void rom_free(void)
 {
-   if (rominfo)
-   {
 #ifdef USE_SRAM_FILE
-      rom_savesram(rominfo);
+   rom_savesram();
 #endif
-      free(rominfo->rom);
-      free(rominfo);
+   if (rom.flags & ROM_FLAG_FREE_DATA)
+   {
+      free(rom.data_ptr);
+      rom.data_ptr = NULL;
    }
+   free(rom.prg_ram);
+   rom.prg_ram = NULL;
+   free(rom.chr_ram);
+   rom.chr_ram = NULL;
 }

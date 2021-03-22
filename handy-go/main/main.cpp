@@ -28,7 +28,7 @@ static int dpad_mapped_right;
 
 static void set_rotation()
 {
-    display_rotation_t rotation = rg_display_get_config_param(rotation);
+    display_rotation_t rotation = rg_display_get_rotation();
 
     if (rotation == RG_DISPLAY_ROTATION_AUTO)
     {
@@ -90,16 +90,16 @@ static void set_rotation()
 
 static dialog_return_t rotation_cb(dialog_option_t *option, dialog_event_t event)
 {
-    int rotation = rg_display_get_config_param(rotation);
+    int rotation = (int)rg_display_get_rotation();
 
     if (event == RG_DIALOG_PREV) {
         if (--rotation < 0) rotation = RG_DISPLAY_ROTATION_COUNT - 1;
-        rg_display_set_config_param(rotation, rotation);
+        rg_display_set_rotation((display_rotation_t)rotation);
         set_rotation();
     }
     if (event == RG_DIALOG_NEXT) {
         if (++rotation > RG_DISPLAY_ROTATION_COUNT - 1) rotation = 0;
-        rg_display_set_config_param(rotation, rotation);
+        rg_display_set_rotation((display_rotation_t)rotation);
         set_rotation();
     }
 
@@ -210,12 +210,12 @@ extern "C" void app_main(void)
     // Start emulation
     while (1)
     {
-        gamepad_state_t joystick = rg_input_read_gamepad();
+        uint32_t joystick = rg_input_read_gamepad();
 
-        if (joystick.values[GAMEPAD_KEY_MENU]) {
+        if (joystick & GAMEPAD_KEY_MENU) {
             rg_gui_game_menu();
         }
-        else if (joystick.values[GAMEPAD_KEY_VOLUME]) {
+        else if (joystick & GAMEPAD_KEY_VOLUME) {
             dialog_option_t options[] = {
                 {100, "Rotation", "Auto", 1, &rotation_cb},
                 RG_DIALOG_CHOICE_LAST
@@ -228,14 +228,14 @@ extern "C" void app_main(void)
 
         ULONG buttons = 0;
 
-    	if (joystick.values[GAMEPAD_KEY_UP])     buttons |= dpad_mapped_up;
-    	if (joystick.values[GAMEPAD_KEY_DOWN])   buttons |= dpad_mapped_down;
-    	if (joystick.values[GAMEPAD_KEY_LEFT])   buttons |= dpad_mapped_left;
-    	if (joystick.values[GAMEPAD_KEY_RIGHT])  buttons |= dpad_mapped_right;
-    	if (joystick.values[GAMEPAD_KEY_A])      buttons |= BUTTON_A;
-    	if (joystick.values[GAMEPAD_KEY_B])      buttons |= BUTTON_B;
-    	if (joystick.values[GAMEPAD_KEY_START])  buttons |= BUTTON_OPT2; // BUTTON_PAUSE
-    	if (joystick.values[GAMEPAD_KEY_SELECT]) buttons |= BUTTON_OPT1;
+    	if (joystick & GAMEPAD_KEY_UP)     buttons |= dpad_mapped_up;
+    	if (joystick & GAMEPAD_KEY_DOWN)   buttons |= dpad_mapped_down;
+    	if (joystick & GAMEPAD_KEY_LEFT)   buttons |= dpad_mapped_left;
+    	if (joystick & GAMEPAD_KEY_RIGHT)  buttons |= dpad_mapped_right;
+    	if (joystick & GAMEPAD_KEY_A)      buttons |= BUTTON_A;
+    	if (joystick & GAMEPAD_KEY_B)      buttons |= BUTTON_B;
+    	if (joystick & GAMEPAD_KEY_START)  buttons |= BUTTON_OPT2; // BUTTON_PAUSE
+    	if (joystick & GAMEPAD_KEY_SELECT) buttons |= BUTTON_OPT1;
 
         lynx->SetButtonData(buttons);
 
@@ -245,7 +245,7 @@ extern "C" void app_main(void)
         {
             rg_video_frame_t *previousUpdate = &frames[currentUpdate == &frames[0]];
 
-            fullFrame = rg_display_queue_update(currentUpdate, previousUpdate) == RG_SCREEN_UPDATE_FULL;
+            fullFrame = rg_display_queue_update(currentUpdate, previousUpdate) == RG_UPDATE_FULL;
 
             currentUpdate = previousUpdate;
             gPrimaryFrameBuffer = (UBYTE*)currentUpdate->buffer;

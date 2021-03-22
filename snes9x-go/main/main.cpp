@@ -6,6 +6,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <time.h>
+#include <math.h>
 
 #include "../components/snes9x/snes9x.h"
 #include "../components/snes9x/memory.h"
@@ -21,23 +22,24 @@
 #define AUDIO_SAMPLE_RATE (22050)
 #define AUDIO_BUFFER_LENGTH (AUDIO_SAMPLE_RATE / 50)
 
-#define SETTING_KEYMAP "keymap"
-
 // static short audioBuffer[AUDIO_BUFFER_LENGTH * 2];
 
 static rg_video_frame_t frames[2];
 static rg_video_frame_t *currentUpdate = &frames[0];
-
-static rg_app_desc_t *app;
+static uint32_t frames_counter = 0;
 
 static char temp_path[PATH_MAX + 1];
-
-static uint32_t frames_counter = 0;
 
 static int keymap_id = 0;
 static keymap_t keymap;
 
-// static bool netplay = false;
+static rg_app_desc_t *app;
+
+#ifdef ENABLE_NETPLAY
+static bool netplay = false;
+#endif
+
+static const char *SETTING_KEYMAP = "keymap";
 // --- MAIN
 
 
@@ -113,12 +115,7 @@ void S9xMessage(int type, int number, const char *message)
 	S9xSetInfoString(buffer);
 }
 
-bool8 S9xInitUpdate(void)
-{
-	return (TRUE);
-}
-
-bool8 S9xDeinitUpdate(int width, int height)
+bool8 S9xBlitUpdate(int width, int height)
 {
 	return (TRUE);
 }
@@ -143,7 +140,6 @@ static void update_keymap(int id)
 
 	for (int i = 0; i < keymap.size; i++)
 	{
-		keymap.keys[i].key_id %= GAMEPAD_KEY_MAX;
 		S9xMapButtonT(i, keymap.keys[i].action);
 	}
 }
@@ -159,7 +155,7 @@ static dialog_return_t menu_keymap_cb(dialog_option_t *option, dialog_event_t ev
 	if (keymap_id != prev)
 	{
 		update_keymap(keymap_id);
-		rg_settings_app_int32_set(SETTING_KEYMAP, keymap_id);
+		rg_settings_set_app_int32(SETTING_KEYMAP, keymap_id);
 	}
 
     strcpy(option->value, keymap.name);
@@ -172,11 +168,14 @@ static dialog_return_t menu_keymap_cb(dialog_option_t *option, dialog_event_t ev
 
 		for (int i = 0; i < keymap.size; i++)
 		{
+			// keys[i].key_id contains a bitmask, convert to bit number
+			int key_id = log2(keymap.keys[i].key_id);
+
 			// For now we don't display the D-PAD because it doesn't fit on large font
-			if (keymap.keys[i].key_id < 4)
+			if (key_id < 4)
 				continue;
 
-			const char *key = KEYNAMES[keymap.keys[i].key_id];
+			const char *key = KEYNAMES[key_id];
 			const char *mod = (keymap.keys[i].mod1) ? "MENU + " : "";
 			option->value = (char*)&values[i];
 			strcpy(option->value, mod);
@@ -261,7 +260,7 @@ static void snes9x_task(void *arg)
 
 	GFX.Screen = (uint16*)currentUpdate->buffer;
 
-	update_keymap(rg_settings_app_int32_get(SETTING_KEYMAP, 0));
+	update_keymap(rg_settings_get_app_int32(SETTING_KEYMAP, 0));
 
 	if (!S9xMemoryInit())
 		RG_PANIC("Memory init failed!");
@@ -288,9 +287,9 @@ static void snes9x_task(void *arg)
 
 	while (1)
 	{
-		gamepad_state_t joystick = rg_input_read_gamepad();
+		uint32_t joystick = rg_input_read_gamepad();
 
-		if (menuPressed && !joystick.values[GAMEPAD_KEY_MENU])
+		if (menuPressed && !(joystick & GAMEPAD_KEY_MENU))
 		{
 			if (!menuCancelled)
 			{
@@ -299,7 +298,7 @@ static void snes9x_task(void *arg)
 			}
 			menuCancelled = false;
 		}
-		else if (joystick.values[GAMEPAD_KEY_VOLUME])
+		else if (joystick & GAMEPAD_KEY_VOLUME)
 		{
 			dialog_option_t options[] = {
 				{2, "Controls", "Type 0", 1, &menu_keymap_cb},
@@ -309,17 +308,16 @@ static void snes9x_task(void *arg)
 
 		int64_t startTime = get_elapsed_time();
 
-		menuPressed = joystick.values[GAMEPAD_KEY_MENU];
+		menuPressed = joystick & GAMEPAD_KEY_MENU;
 
-		if (menuPressed && (joystick.values[GAMEPAD_KEY_B] || joystick.values[GAMEPAD_KEY_A]
-				|| joystick.values[GAMEPAD_KEY_START] || joystick.values[GAMEPAD_KEY_SELECT]))
+		if (menuPressed && (joystick & (GAMEPAD_KEY_B|GAMEPAD_KEY_A|GAMEPAD_KEY_START|GAMEPAD_KEY_SELECT)))
 		{
 			menuCancelled = true;
 		}
 
 		for (int i = 0; i < keymap.size; i++)
 		{
-			S9xReportButton(i, joystick.values[keymap.keys[i].key_id] && keymap.keys[i].mod1 == menuPressed);
+			S9xReportButton(i, (joystick & (keymap.keys[i].key_id)) && keymap.keys[i].mod1 == menuPressed);
 		}
 
 		S9xMainLoop();
@@ -329,7 +327,7 @@ static void snes9x_task(void *arg)
 		if (IPPU.RenderThisFrame)
 		{
 			rg_video_frame_t *previousUpdate = &frames[currentUpdate == &frames[0]];
-			fullFrame = rg_display_queue_update(currentUpdate, previousUpdate);
+			fullFrame = rg_display_queue_update(currentUpdate, previousUpdate) == RG_UPDATE_PARTIAL;
 			currentUpdate = previousUpdate;
 		}
 

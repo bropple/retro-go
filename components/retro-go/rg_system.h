@@ -61,7 +61,6 @@ typedef enum
     EMU_PATH_TEMP_FILE,
     EMU_PATH_ROM_FILE,
     EMU_PATH_ART_FILE,
-    EMU_PATH_CRC_CACHE,
 } emu_path_type_t;
 
 typedef enum
@@ -96,8 +95,8 @@ typedef struct
     uint32_t freeStackMain;
 } runtime_stats_t;
 
-i2c_dev_t rg_system_init(int app_id, int sampleRate); //needs to return i2c_dev_t to make the RTC struct available to the system. Doesn't need to be used for every emu...
-void rg_system_panic(const char *reason, const char *function, const char *file) __attribute__((noreturn));
+i2c_dev_t rg_system_init(int app_id, int sampleRate); //needs to return i2c_dev_t to make the RTC struct available to the system. 
+void rg_system_panic(const char *reason, const char *context) __attribute__((noreturn));
 void rg_system_halt() __attribute__((noreturn));
 void rg_system_sleep() __attribute__((noreturn));
 void rg_system_restart() __attribute__((noreturn));
@@ -113,22 +112,23 @@ runtime_stats_t rg_system_get_stats();
 void rg_system_time_init();
 void rg_system_time_save();
 
+bool rg_sdcard_init(void);
+bool rg_sdcard_deinit(void);
+
 void rg_emu_init(const rg_emu_proc_t *handlers);
 char *rg_emu_get_path(emu_path_type_t type, const char *romPath);
 bool rg_emu_save_state(int slot);
 bool rg_emu_load_state(int slot);
 bool rg_emu_reset(int hard);
 bool rg_emu_notify(int msg, void *arg);
+bool rg_emu_start_game(const char *emulator, const char *romPath, emu_start_action_t action);
 
 void rg_spi_lock_acquire(spi_lock_res_t);
 void rg_spi_lock_release(spi_lock_res_t);
 
-bool rg_sdcard_mount();
-bool rg_sdcard_unmount();
-
 bool rg_fs_mkdir(const char *path);
 bool rg_fs_delete(const char* path);
-bool rg_fs_readdir(const char* path, char **out_files, size_t *out_count);
+bool rg_fs_readdir(const char* path, char **out_files, size_t *out_count, bool skip_hidden);
 long rg_fs_filesize(const char *path);
 const char* rg_fs_basename(const char *path);
 const char* rg_fs_dirname(const char *path);
@@ -168,8 +168,8 @@ extern uint32_t crc32_le(uint32_t crc, const uint8_t * buf, uint32_t len);
 #define RG_MAX(a, b) ({__typeof__(a) _a = (a); __typeof__(b) _b = (b);_a > _b ? _a : _b; })
 
 // This should really support printf format...
-#define RG_PANIC(x) rg_system_panic(x, __FUNCTION__, __FILE__)
-#define RG_ASSERT(cond, x) do { if (!(cond)) rg_system_panic(x, __FUNCTION__, __FILE__); } while(0);
+#define RG_PANIC(x) rg_system_panic(x, __FUNCTION__)
+#define RG_ASSERT(cond, x) while (!(cond)) { RG_PANIC(x); }
 
 #define RG_LOGX(x, ...) printf(x, ## __VA_ARGS__)
 #define RG_LOGE(x, ...) printf("!! %s: " x, __func__, ## __VA_ARGS__)
