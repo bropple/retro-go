@@ -893,7 +893,7 @@ i2c_dev_t rg_rtc_init(void)
     if (ds3231_init_desc(&dev, I2C_NUM_0, 15, 4) != ESP_OK) {
         rg_display_clear(C_RED);
         rg_gui_alert("DS3231M", "RTC init FAIL - Disabling.");
-        rg_settings_int32_set("RTCstate", 0);
+        rg_settings_set_int32("RTCstate", 0);
         dev.port = 255; //an out-of-range value for an I2C address, so we know it errored
     }
     

@@ -2,11 +2,8 @@
 
 #include <stdbool.h>
 #include <stdint.h>
-<<<<<<< HEAD
-#include <time.h>
-=======
 #include <stddef.h>
->>>>>>> master
+#include <time.h>
 
 typedef enum {
     RG_DIALOG_INIT,

@@ -593,11 +593,6 @@ int rg_gui_dialog(const char *header, const dialog_option_t *options_const, int 
         free(options[i].value);
     }
 
-    for (int i = 0; i < options_count; i++)
-    {
-        free(options[i].value);
-    }
-
     return sel < 0 ? sel : options[sel].id;
 }
 
@@ -984,8 +979,8 @@ void rg_gui_draw_time(struct tm time, int x_pos, int y_pos, int format, int mont
         }
     }
     
-    rg_gui_draw_text(x_pos, y_pos, time_width, time_buff, C_WHITE, C_BLACK);
-    if(ampm < 2) rg_gui_draw_text(ampm_pos, y_pos, 16, ampm_text[ampm], C_WHITE, C_BLACK);
-    rg_gui_draw_text(day_pos, y_pos, 24, rg_rtc_getDay_text(time.tm_wday), C_WHITE, C_BLACK);
+    rg_gui_draw_text(x_pos, y_pos, time_width, time_buff, C_WHITE, C_BLACK, 0);
+    if(ampm < 2) rg_gui_draw_text(ampm_pos, y_pos, 16, ampm_text[ampm], C_WHITE, C_BLACK, 0);
+    rg_gui_draw_text(day_pos, y_pos, 24, rg_rtc_getDay_text(time.tm_wday), C_WHITE, C_BLACK, 0);
 
 }

@@ -15,8 +15,6 @@ void rg_settings_reset(void);
 bool rg_settings_load(void);
 bool rg_settings_save(void);
 
-<<<<<<< HEAD
-=======
 void rg_settings_set_string(const char *key, const char *value);
 char* rg_settings_get_string(const char *key, const char *default_value);
 
@@ -26,8 +24,6 @@ void rg_settings_set_int32(const char *key, int32_t value);
 int32_t rg_settings_get_app_int32(const char *key, int32_t value_default);
 void rg_settings_set_app_int32(const char *key, int32_t value);
 
-
->>>>>>> master
 char* rg_settings_RomFilePath_get();
 void rg_settings_RomFilePath_set(const char* value);
 
