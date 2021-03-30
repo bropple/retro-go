@@ -7,8 +7,6 @@ extern "C" {
 
 #include <handy.h>
 
-#define APP_ID 50
-
 #define AUDIO_SAMPLE_RATE   (HANDY_AUDIO_SAMPLE_FREQ)
 #define AUDIO_BUFFER_LENGTH (AUDIO_SAMPLE_RATE / 40)
 
@@ -121,10 +119,10 @@ static bool save_state_handler(char *pathName)
         ret = lynx->ContextSave(fp);
         fclose(fp);
 
-        char *filename = rg_emu_get_path(EMU_PATH_SCREENSHOT, 0);
+        char *filename = rg_emu_get_path(RG_PATH_SCREENSHOT, 0);
         if (filename)
         {
-            rg_display_save_frame(filename, currentUpdate, -1, -1);
+            rg_display_save_frame(filename, currentUpdate, 160, 0);
             rg_free(filename);
         }
     }
@@ -166,10 +164,7 @@ extern "C" void app_main(void)
         .netplay = NULL,
     };
 
-    rg_system_init(APP_ID, AUDIO_SAMPLE_RATE);
-    rg_emu_init(&handlers);
-
-    app = rg_system_get_app();
+    app = rg_system_init(AUDIO_SAMPLE_RATE, &handlers);
 
     frames[0].flags = RG_PIXEL_565|RG_PIXEL_BE;
     frames[0].width = HANDY_SCREEN_WIDTH;
@@ -196,7 +191,7 @@ extern "C" void app_main(void)
     gAudioBuffer = (SWORD*)&audioBuffer;
     gAudioEnabled = 1;
 
-    if (app->startAction == EMU_START_ACTION_RESUME)
+    if (app->startAction == RG_START_ACTION_RESUME)
     {
         rg_emu_load_state(0);
     }

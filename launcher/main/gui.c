@@ -12,18 +12,18 @@
 #define IMAGE_BANNER_WIDTH  (272)
 #define IMAGE_BANNER_HEIGHT (32)
 
-#define CRC_WIDTH    (104)
-#define CRC_X_OFFSET (RG_SCREEN_WIDTH - CRC_WIDTH)
-#define CRC_Y_OFFSET (35)
+#define CRC_WIDTH           (104)
+#define CRC_X_OFFSET        (RG_SCREEN_WIDTH - CRC_WIDTH)
+#define CRC_Y_OFFSET        (35)
 
-#define LIST_WIDTH       (RG_SCREEN_WIDTH)
-#define LIST_HEIGHT      (RG_SCREEN_HEIGHT - LIST_Y_OFFSET)
-#define LIST_LINE_COUNT  (LIST_HEIGHT / rg_gui_get_font_info().height)
-#define LIST_X_OFFSET    (0)
-#define LIST_Y_OFFSET    (48 + 8)
+#define LIST_WIDTH          (RG_SCREEN_WIDTH)
+#define LIST_HEIGHT         (RG_SCREEN_HEIGHT - LIST_Y_OFFSET)
+#define LIST_LINE_COUNT     (LIST_HEIGHT / rg_gui_get_font_info().height)
+#define LIST_X_OFFSET       (0)
+#define LIST_Y_OFFSET       (48 + 8)
 
-#define COVER_MAX_HEIGHT (184)
-#define COVER_MAX_WIDTH  (184)
+#define COVER_MAX_HEIGHT    (184)
+#define COVER_MAX_WIDTH     (184)
 
 static const theme_t gui_themes[] = {
     {0, C_GRAY, C_WHITE, C_AQUA},
@@ -84,7 +84,7 @@ void gui_init_tab(tab_t *tab)
 
     char key_name[32];
     sprintf(key_name, "Sel.%.11s", tab->name);
-    tab->listbox.cursor = rg_settings_get_int32(key_name, 0);
+    tab->listbox.cursor = rg_settings_get_app_int32(key_name, 0);
 
     gui_event(TAB_INIT, tab);
 
@@ -119,8 +119,8 @@ void gui_save_current_tab()
     tab_t *tab = gui_get_current_tab();
     char key_name[32];
     sprintf(key_name, "Sel.%.11s", tab->name);
-    rg_settings_set_int32(key_name, tab->listbox.cursor);
-    rg_settings_set_int32("SelectedTab", gui.selected);
+    rg_settings_set_app_int32(key_name, tab->listbox.cursor);
+    rg_settings_set_app_int32("SelectedTab", gui.selected);
     // rg_settings_save();
 }
 
@@ -341,17 +341,25 @@ void gui_draw_preview(retro_emulator_file_t *file)
             continue;
         }
 
+        gui.joystick = rg_input_read_gamepad();
+
+        if (type == 0x1 || type == 0x2)
+        {
+            emulator_crc32_file(file);
+        }
+
+        if (gui.joystick & GAMEPAD_KEY_ANY)
+        {
+            break;
+        }
+
         switch (type)
         {
             case 0x1: // Game cover (old format)
-                if (!emulator_crc32_file(file))
-                    continue;
                 sprintf(path, RG_BASE_PATH_ROMART "/%s/%X/%08X.art", dirname, file->checksum >> 28, file->checksum);
                 img = rg_gui_load_image_file(path);
                 break;
             case 0x2: // Game cover (png)
-                if (!emulator_crc32_file(file))
-                    continue;
                 sprintf(path, RG_BASE_PATH_ROMART "/%s/%X/%08X.png", dirname, file->checksum >> 28, file->checksum);
                 img = rg_gui_load_image_file(path);
                 break;
@@ -359,10 +367,16 @@ void gui_draw_preview(retro_emulator_file_t *file)
                 sprintf(path, "%s/%s/%s.%s.png", RG_BASE_PATH_SAVES, dirname, file->name, file->ext);
                 img = rg_gui_load_image_file(path);
                 break;
+            case 0x4: // use default image (not currently used)
+                sprintf(path, RG_BASE_PATH_ROMART "/%s/default.png", dirname);
+                img = rg_gui_load_image_file(path);
+                break;
         }
 
         file->missing_cover |= (img ? 0 : 1) << type;
     }
+
+    gui_draw_notice(" ", C_BLACK);
 
     if (img)
     {
@@ -374,10 +388,8 @@ void gui_draw_preview(retro_emulator_file_t *file)
 
         rg_gui_draw_image(320 - width, 240 - height, width, height, img);
         rg_gui_free_image(img);
-        return;
     }
-
-    if (show_art_missing)
+    else if (show_art_missing)
     {
         gui_draw_notice(" No art found", C_RED);
     }

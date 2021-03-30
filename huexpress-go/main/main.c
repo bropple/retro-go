@@ -18,8 +18,6 @@
 
 #include "../components/huexpress/engine/osd.h"
 
-#define APP_ID 40
-
 #define AUDIO_SAMPLE_RATE 22050
 // #define AUDIO_BUFFER_LENGTH  (AUDIO_SAMPLE_RATE / 60)
 #define AUDIO_BUFFER_LENGTH (AUDIO_SAMPLE_RATE / 60 / 5)
@@ -313,7 +311,7 @@ static bool save_state_handler(char *pathName)
 {
     if (SaveState(pathName) == 0)
     {
-        char *filename = rg_emu_get_path(EMU_PATH_SCREENSHOT, 0);
+        char *filename = rg_emu_get_path(RG_PATH_SCREENSHOT, 0);
         if (filename)
         {
             // We must use previous update because at this point current has been wiped.
@@ -351,18 +349,15 @@ void app_main(void)
         .reset = &reset_handler,
     };
 
-    rg_system_init(APP_ID, AUDIO_SAMPLE_RATE);
-    rg_emu_init(&handlers);
+    app = rg_system_init(AUDIO_SAMPLE_RATE, &handlers);
 
     // Clearing the buffer on the display core is somewhat faster, but it
     // prevents us from doing partial updates and screenshots.
     // rg_display_set_callback(clear_buffer);
 
-    app = rg_system_get_app();
-
     InitPCE(app->romPath);
 
-    if (app->startAction == EMU_START_ACTION_RESUME)
+    if (app->startAction == RG_START_ACTION_RESUME)
     {
         rg_emu_load_state(0);
     }

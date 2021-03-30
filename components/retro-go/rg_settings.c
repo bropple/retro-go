@@ -11,38 +11,54 @@
 #define CONFIG_FILE_PATH "/sd/odroid/retro-go.json"
 #define CONFIG_NAMESPACE "retro-go"
 #define CONFIG_NVS_STORE "config"
-
-// Global
-static const char* Key_RomFilePath  = "RomFilePath";
-static const char* Key_StartAction  = "StartAction";
-static const char* Key_StartupApp   = "StartupApp";
-static const char* Key_DiskActivity = "DiskActivity";
-// static const char* Key_RetroGoVer   = "RetroGoVer";
-// Per-app
-// static const char* Key_AudioFilter  = "AudioFilter";
-
-static int unsaved_changes = 0;
-static bool initialized = false;
-static cJSON *root = NULL;
-static cJSON *app_root = NULL;
+#define CONFIG_VERSION    0x01
 
 #if !USE_CONFIG_FILE
     #include <nvs_flash.h>
     static nvs_handle my_handle = 0;
 #endif
 
+static int unsaved_changes = 0;
+static cJSON *root = NULL;
+static cJSON *app_root = NULL;
 
-static inline void json_set(const char *key, cJSON *value)
+
+static cJSON *json_get(cJSON *root, const char *key)
 {
+    if (!root)
+    {
+        RG_LOGW("Trying to get key '%s' before rg_settings_init() was called!\n", key);
+        return NULL;
+    }
+
+    return cJSON_GetObjectItem(root, key);
+}
+
+static void json_set(cJSON *root, const char *key, cJSON *value)
+{
+    if (!root)
+    {
+        RG_LOGW("Trying to set key '%s' before rg_settings_init() was called!\n", key);
+        return;
+    }
+
     cJSON *obj = cJSON_GetObjectItem(root, key);
+
     if (obj == NULL)
+    {
         cJSON_AddItemToObject(root, key, value);
-    else
+        unsaved_changes++;
+    }
+    else if (cJSON_Compare(obj, value, 0) == false)
+    {
+        // cJSON_ReplaceItemViaPointer(root, obj, value);
         cJSON_ReplaceItemInObject(root, key, value);
+        unsaved_changes++;
+    }
 }
 
 
-void rg_settings_init()
+void rg_settings_init(const char *app_name)
 {
     char *buffer = NULL;
     char *source;
@@ -94,9 +110,25 @@ void rg_settings_init()
         root = cJSON_CreateObject();
     }
 
-    app_root = NULL;
+    rg_settings_set_app_name(app_name);
 
-    initialized = true;
+    json_set(root, "version", cJSON_CreateNumber(CONFIG_VERSION));
+}
+
+void rg_settings_set_app_name(const char *app_name)
+{
+    app_name = app_name ? app_name : "__app__";
+    app_root = cJSON_GetObjectItem(root, app_name);
+
+    if (!app_root)
+    {
+        app_root = cJSON_AddObjectToObject(root, app_name);
+    }
+    else if (!cJSON_IsObject(app_root))
+    {
+        app_root = cJSON_CreateObject();
+        cJSON_ReplaceItemInObject(root, app_name, app_root);
+    }
 }
 
 bool rg_settings_save(void)
@@ -116,7 +148,7 @@ bool rg_settings_save(void)
     if (!fp)
     {
         // Sometimes the FAT is left in an inconsistent state and this might help
-        rg_fs_delete(CONFIG_FILE_PATH);
+        rg_vfs_delete(CONFIG_FILE_PATH);
         fp = fopen(CONFIG_FILE_PATH, "wb");
     }
     if (fp)
@@ -137,121 +169,64 @@ bool rg_settings_save(void)
 
 void rg_settings_reset(void)
 {
-    cJSON_free(root);
+    cJSON_Delete(root);
     root = cJSON_CreateObject();
     unsaved_changes++;
     rg_settings_save();
 }
 
+bool rg_settings_ready(void)
+{
+    return root != NULL;
+}
+
+int32_t rg_settings_get_int32(const char *key, int32_t default_value)
+{
+    cJSON *obj = json_get(root, key);
+    return obj ? obj->valueint : default_value;
+}
+
+void rg_settings_set_int32(const char *key, int32_t value)
+{
+    json_set(root, key, cJSON_CreateNumber(value));
+}
+
 char *rg_settings_get_string(const char *key, const char *default_value)
 {
-    if (!initialized)
-    {
-        RG_LOGW("Trying to get key '%s' before rg_settings_init() was called!\n", key);
-    }
-    else
-    {
-        cJSON *obj = cJSON_GetObjectItem(root, key);
-        if (obj != NULL && obj->valuestring != NULL)
-        {
-            return strdup(obj->valuestring);
-        }
-    }
+    cJSON *obj = json_get(root, key);
+    if (obj && obj->valuestring)
+        return strdup(obj->valuestring);
 
     return default_value ? strdup(default_value) : NULL;
 }
 
 void rg_settings_set_string(const char *key, const char *value)
 {
-    if (!initialized)
-    {
-        RG_LOGW("Trying to set key '%s' before rg_settings_init() was called!\n", key);
-        return;
-    }
-
-    json_set(key, cJSON_CreateString(value));
-    unsaved_changes++;
+    json_set(root, key, cJSON_CreateString(value));
 }
-
-int32_t rg_settings_get_int32(const char *key, int32_t default_value)
-{
-    if (!initialized)
-    {
-        RG_LOGW("Trying to get key '%s' before rg_settings_init() was called!\n", key);
-        return default_value;
-    }
-
-    cJSON *obj = cJSON_GetObjectItem(root, key);
-
-    return obj ? obj->valueint : default_value;
-}
-
-void rg_settings_set_int32(const char *key, int32_t value)
-{
-    if (!initialized)
-    {
-        RG_LOGW("Trying to set key '%s' before rg_settings_init() was called!\n", key);
-        return;
-    }
-    else if (rg_settings_get_int32(key, ~value) == value)
-    {
-        return; // Do nothing, value identical
-    }
-
-    json_set(key, cJSON_CreateNumber(value));
-    unsaved_changes++;
-}
-
 
 int32_t rg_settings_get_app_int32(const char *key, int32_t default_value)
 {
-    char app_key[32];
-    snprintf(app_key, 32, "%.16s.%u", key, rg_system_get_app()->id);
-    return rg_settings_get_int32(app_key, default_value);
+    cJSON *obj = json_get(app_root, key);
+    return obj ? obj->valueint : default_value;
 }
 
 void rg_settings_set_app_int32(const char *key, int32_t value)
 {
-    char app_key[32];
-    snprintf(app_key, 32, "%.16s.%u", key, rg_system_get_app()->id);
-    rg_settings_set_int32(app_key, value);
+    json_set(app_root, key, cJSON_CreateNumber(value));
 }
 
-char* rg_settings_RomFilePath_get()
+char *rg_settings_get_app_string(const char *key, const char *default_value)
 {
-    return rg_settings_get_string(Key_RomFilePath, NULL);
-}
-void rg_settings_RomFilePath_set(const char* value)
-{
-    rg_settings_set_string(Key_RomFilePath, value);
+    cJSON *obj = json_get(app_root, key);
+
+    if (obj && obj->valuestring)
+        return strdup(obj->valuestring);
+
+    return default_value ? strdup(default_value) : NULL;
 }
 
-
-emu_start_action_t rg_settings_StartAction_get()
+void rg_settings_set_app_string(const char *key, const char *value)
 {
-    return rg_settings_get_int32(Key_StartAction, 0);
-}
-void rg_settings_StartAction_set(emu_start_action_t value)
-{
-    rg_settings_set_int32(Key_StartAction, value);
-}
-
-
-int32_t rg_settings_StartupApp_get()
-{
-    return rg_settings_get_int32(Key_StartupApp, 1);
-}
-void rg_settings_StartupApp_set(int32_t value)
-{
-    rg_settings_set_int32(Key_StartupApp, value);
-}
-
-
-int32_t rg_settings_DiskActivity_get()
-{
-    return rg_settings_get_int32(Key_DiskActivity, 0);
-}
-void rg_settings_DiskActivity_set(int32_t value)
-{
-    rg_settings_set_int32(Key_DiskActivity, value);
+    json_set(app_root, key, cJSON_CreateString(value));
 }
