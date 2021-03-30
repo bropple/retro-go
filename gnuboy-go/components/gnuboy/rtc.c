@@ -29,13 +29,18 @@ void rtc_sync(i2c_dev_t dev)
     if(rg_settings_get_int32(SETTING_RTC_ENABLE, 0) == 1)
     {
         struct tm time = rg_rtc_getTime(dev);
-        rtc.d = dayOfYear(time.tm_year, time.tm_mon, time.tm_mday);
-        rtc.h = time.tm_hour;
-        rtc.m = time.tm_min;
-        rtc.s = time.tm_sec;
+        if(dev.port < 254)
+        {
+            MESSAGE_INFO("Syncing HW RTC with GB RTC");
+            rtc.d = dayOfYear(time.tm_year, time.tm_mon, time.tm_mday);
+            rtc.h = time.tm_hour;
+            rtc.m = time.tm_min;
+            rtc.s = time.tm_sec;
+        }
     }
-	else
+	else if((rg_settings_get_int32(SETTING_RTC_ENABLE, 0) == 1) || dev.port > 254)
     {
+        MESSAGE_INFO("Using localtime with GB RTC");
         struct tm *info = localtime(&timer);
         rtc.d = info->tm_yday;
         rtc.h = info->tm_hour;
