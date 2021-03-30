@@ -256,13 +256,12 @@ rg_app_desc_t *rg_system_init(int sampleRate, const rg_emu_proc_t *handlers)
     rg_system_time_init();
     
     //Start up external RTC - must be enabled first.
-    i2c_dev_t dev;
     if(rg_settings_get_int32(SETTING_RTC_ENABLE, 0) == 1)
     {
-        dev = rg_rtc_init();
+        app.dev = rg_rtc_init();
         RG_LOGE("DS3231M is initialized.\n");
     }
-    else dev.port = 254; //disabled
+    else app.dev.port = 254; //disabled
     //rg_rtc_debug(rg_rtc_getTime(dev));
 
     if (esp_reset_reason() == ESP_RST_PANIC)

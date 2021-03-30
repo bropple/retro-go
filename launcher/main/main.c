@@ -21,7 +21,7 @@ static const char *SETTING_RTC_MONTH_TXT = "RTCmonthText";
 static const char *SETTING_RTC_HOUR_PREF = "RTChourPref";
 
 struct tm RTCtimeBuf = { 0 }; //time buffer for use in RTC settings
-i2c_dev_t dev;
+static rg_app_desc_t *app; //contains RTC device descriptor
 
 static dialog_return_t font_type_cb(dialog_option_t *option, dialog_event_t event)
 {
@@ -212,9 +212,9 @@ static dialog_return_t rtc_t_set_cb(dialog_option_t *option, dialog_event_t even
             //rg_gui_alert("Time Buffer",  message);
             
             //use RTCtimeBuf struct to update RTC time
-            if(dev.port < 254)
+            if(app->dev.port < 254)
             {
-                ds3231_set_time(&dev, &RTCtimeBuf);
+                ds3231_set_time(&app->dev, &RTCtimeBuf);
             }
             else rg_gui_alert("DS3231M",  "Unable to update RTC time!");
         }
@@ -365,7 +365,6 @@ void retro_loop(i2c_dev_t dev)
             if (gui.idle_counter % 100 == 0)
                 gui_draw_status(tab);
         }
-
         if ((gui.joystick & last_key) && repeat > 0)
         {
             last_key |= (1 << 24); // No repeat
@@ -373,81 +372,6 @@ void retro_loop(i2c_dev_t dev)
             {
                 last_key &= GAMEPAD_KEY_ANY;
                 repeat = 4;
-            }
-        } else {
-            for (int i = 0; i < GAMEPAD_KEY_COUNT; i++)
-                if (gui.joystick & (1 << i))
-                    last_key = (1 << i);
-
-            if (last_key == GAMEPAD_KEY_MENU) {
-                char buildstr[32], datestr[32];
-
-                dialog_option_t options[] = {
-                    {0, "Ver.", buildstr, 1, NULL},
-                    {0, "Date", datestr, 1, NULL},
-                    {0, "By", "ducalex", 1, NULL},
-                    RG_DIALOG_SEPARATOR,
-                    {1, "Reboot to firmware", NULL, 1, NULL},
-                    {2, "Reset settings", NULL, 1, NULL},
-                    {3, "Clear cache", NULL, 1, NULL},
-                    {0, "Close", NULL, 1, NULL},
-                    RG_DIALOG_CHOICE_LAST
-                };
-
-                const esp_app_desc_t *app = esp_ota_get_app_description();
-                sprintf(buildstr, "%.30s", app->version);
-                sprintf(datestr, "%s %.5s", app->date, app->time);
-
-                if (strstr(app->version, "-0-") == strrchr(app->version, '-') - 2)
-                    sprintf(strstr(buildstr, "-0-") , " (%s)", strrchr(app->version, '-') + 1);
-
-                int sel = rg_gui_dialog("Retro-Go", options, -1);
-                if (sel == 1) {
-                    rg_system_switch_app(RG_APP_FACTORY);
-                }
-                else if (sel == 2) {
-                    if (rg_gui_confirm("Reset all settings?", NULL, false)) {
-                        rg_settings_reset();
-                        rg_system_restart();
-                    }
-                }
-                else if (sel == 3) {
-                    rg_fs_delete(CRC_CACHE_PATH);
-                }
-                gui_redraw();
-            }
-            else if (last_key == GAMEPAD_KEY_VOLUME) {
-                dialog_option_t options[] = {
-                    RG_DIALOG_SEPARATOR,
-                    {0, "Color theme", "...",  1, &color_shift_cb},
-                    {0, "Font type  ", "...",  1, &font_type_cb},
-                    {0, "Empty tabs ", "...",  1, &show_empty_cb},
-                    {0, "Preview    ", "...",  1, &show_preview_cb},
-                    {0, "    - Delay", "...",  1, &show_preview_speed_cb},
-                    {0, "Startup app", "...",  1, &startup_app_cb},
-                    {0, "Disk LED   ", "off",  1, &disk_activity_cb},
-                    {0, "HW RTC Settings", NULL, 1, &rtc_master_enable_cb},
-                    RG_DIALOG_CHOICE_LAST
-                };
-                rg_gui_settings_menu(options);
-                gui_redraw();
-            }
-            else if (last_key == GAMEPAD_KEY_SELECT) {
-                debounce = -10;
-                gui.selected--;
-            }
-            else if (last_key == GAMEPAD_KEY_START) {
-                debounce = -10;
-                gui.selected++;
-            }
-            else if (last_key == GAMEPAD_KEY_UP) {
-                gui_scroll_list(tab, LINE_UP);
-            }
-            else if (last_key == GAMEPAD_KEY_DOWN) {
-                gui_scroll_list(tab, LINE_DOWN);
-            }
-            else if (last_key == GAMEPAD_KEY_LEFT) {
-                gui_scroll_list(tab, PAGE_UP);
             }
         }
         else
@@ -495,17 +419,18 @@ void retro_loop(i2c_dev_t dev)
             gui_redraw();
         }
         else if (last_key == GAMEPAD_KEY_VOLUME) {
-            const dialog_option_t options[] = {
-                RG_DIALOG_SEPARATOR,
-                {0, "Color theme", "...", 1, &color_shift_cb},
-                {0, "Font type  ", "...", 1, &font_type_cb},
-                {0, "Empty tabs ", "...", 1, &show_empty_cb},
-                {0, "Preview    ", "...", 1, &show_preview_cb},
-                {0, "    - Delay", "...", 1, &show_preview_speed_cb},
-                {0, "Startup app", "...", 1, &startup_app_cb},
-                {0, "Disk LED   ", "...", 1, &disk_activity_cb},
-                RG_DIALOG_CHOICE_LAST
-            };
+                const dialog_option_t options[] = {
+                    RG_DIALOG_SEPARATOR,
+                    {0, "Color theme", "...",  1, &color_shift_cb},
+                    {0, "Font type  ", "...",  1, &font_type_cb},
+                    {0, "Empty tabs ", "...",  1, &show_empty_cb},
+                    {0, "Preview    ", "...",  1, &show_preview_cb},
+                    {0, "    - Delay", "...",  1, &show_preview_speed_cb},
+                    {0, "Startup app", "...",  1, &startup_app_cb},
+                    {0, "Disk LED   ", "off",  1, &disk_activity_cb},
+                    {0, "HW RTC Settings", NULL, 1, &rtc_master_enable_cb},
+                    RG_DIALOG_CHOICE_LAST
+                };
             rg_gui_settings_menu(options);
             gui_redraw();
         }
@@ -562,10 +487,9 @@ void retro_loop(i2c_dev_t dev)
 void app_main(void)
 {
     app = rg_system_init(32000, NULL);
-    dev = app->dev;
 
     emulators_init();
     favorites_init();
     
-    retro_loop(dev);
+    retro_loop(app->dev);
 }
