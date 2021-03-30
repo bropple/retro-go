@@ -203,6 +203,11 @@ static dialog_return_t rtc_t_set_cb(dialog_option_t *option, dialog_event_t even
         if (event == RG_DIALOG_NEXT && ++RTCtimeBuf.tm_sec > 59) RTCtimeBuf.tm_sec = 0;
         sprintf(option->value, "%02d", RTCtimeBuf.tm_sec);
     }
+    if (option->id == 'T') {
+//         if (event == RG_DIALOG_PREV && --RTCtimeBuf.tm_sec < 0) RTCtimeBuf.tm_sec = 59;
+//         if (event == RG_DIALOG_NEXT && ++RTCtimeBuf.tm_sec > 59) RTCtimeBuf.tm_sec = 0;
+//         sprintf(option->value, "%02d", RTCtimeBuf.tm_sec);
+    }
     if (option->id == 'C') {
         if(event == RG_DIALOG_ENTER)
         {
@@ -214,7 +219,7 @@ static dialog_return_t rtc_t_set_cb(dialog_option_t *option, dialog_event_t even
             //use RTCtimeBuf struct to update RTC time
             if(app->dev.port < 254)
             {
-                ds3231_set_time(&app->dev, &RTCtimeBuf);
+                ds3231_set_time(&(app->dev), &RTCtimeBuf);
             }
             else rg_gui_alert("DS3231M",  "Unable to update RTC time!");
         }
@@ -234,6 +239,7 @@ static dialog_return_t rtc_set_time_cb(dialog_option_t *option, dialog_event_t e
             {'h', "Hour", "00", 1, &rtc_t_set_cb},
             {'m', "Min",  "00", 1, &rtc_t_set_cb},
             {'s', "Sec",  "00", 1, &rtc_t_set_cb},
+            {'T', "DST",  "Off", 1, &rtc_t_set_cb},
             {'C', "Save Changes", NULL, 1, &rtc_t_set_cb},
             RG_DIALOG_CHOICE_LAST
         };
@@ -246,14 +252,15 @@ static dialog_return_t rtc_state_cb(dialog_option_t *option, dialog_event_t even
 {
     if (event == RG_DIALOG_ENTER) {
         dialog_option_t options[] = {
-            {202, "Date Format    ", "...", gui.rtc_enable, &rtc_format_cb},
-            {203, "Month Text     ", "...", gui.rtc_enable, &rtc_month_text_cb},
-            {204, "12h or 24h     ", "...", gui.rtc_enable, &rtc_hour_pref_cb},
-            {205, "Set Date & Time", NULL, gui.rtc_enable, &rtc_set_time_cb},
+            {202, "Date Format", "...", gui.rtc_enable, &rtc_format_cb},
+            {203, "Month Text", "...", gui.rtc_enable, &rtc_month_text_cb},
+            {204, "12h or 24h", "...", gui.rtc_enable, &rtc_hour_pref_cb},
+            //{205, "Daylight Savings Time", "...", gui.rtc_enable, &rtc_hour_pref_cb},
+            {206, "Set Date & Time", NULL, gui.rtc_enable, &rtc_set_time_cb},
             RG_DIALOG_CHOICE_LAST
         };
         
-        rg_gui_dialog("DS3231M RTC Date/Time Settings", options, 0);
+        rg_gui_dialog("HW RTC Time Settings", options, 0);
     }
     return false;
 }
