@@ -19,6 +19,7 @@ static const char *SETTING_RTC_ENABLE    = "RTCenable";
 static const char *SETTING_RTC_FORMAT    = "RTCformat";
 static const char *SETTING_RTC_MONTH_TXT = "RTCmonthText";
 static const char *SETTING_RTC_HOUR_PREF = "RTChourPref";
+static const char *SETTING_RTC_DST       = "RTCdst";
 
 struct tm RTCtimeBuf = { 0 }; //time buffer for use in RTC settings
 static rg_app_desc_t *app; //contains RTC device descriptor
@@ -161,8 +162,19 @@ static dialog_return_t rtc_hour_pref_cb(dialog_option_t *option, dialog_event_t 
     return event == RG_DIALOG_ENTER;
 }
 
+static dialog_return_t rtc_dst_cb(dialog_option_t *option, dialog_event_t event)
+{
+    if (event == RG_DIALOG_PREV || event == RG_DIALOG_NEXT) {
+        gui.rtc_dst = gui.rtc_dst ? 0 : 1;
+        rg_settings_set_int32(SETTING_RTC_DST, gui.rtc_dst);
+    }
+    strcpy(option->value, gui.rtc_dst ? "On" : "Off");
+    return event == RG_DIALOG_ENTER;
+}
+
 static dialog_return_t rtc_t_set_cb(dialog_option_t *option, dialog_event_t event)
 {
+    bool dst_toggled = false; //dst variable for these settings only
     if(option->id == 'Y') {
         //2000 min, 2090 max
         if (event == RG_DIALOG_PREV && --RTCtimeBuf.tm_year < 2000) RTCtimeBuf.tm_year = 2100;
@@ -204,9 +216,11 @@ static dialog_return_t rtc_t_set_cb(dialog_option_t *option, dialog_event_t even
         sprintf(option->value, "%02d", RTCtimeBuf.tm_sec);
     }
     if (option->id == 'T') {
-//         if (event == RG_DIALOG_PREV && --RTCtimeBuf.tm_sec < 0) RTCtimeBuf.tm_sec = 59;
-//         if (event == RG_DIALOG_NEXT && ++RTCtimeBuf.tm_sec > 59) RTCtimeBuf.tm_sec = 0;
-//         sprintf(option->value, "%02d", RTCtimeBuf.tm_sec);
+        if (event == RG_DIALOG_PREV || event == RG_DIALOG_NEXT) {
+            dst_toggled = dst_toggled ? 0 : 1;
+            //rg_settings_set_int32(SETTING_RTC_DST, gui.rtc_dst);
+        }
+        strcpy(option->value, dst_toggled ? "On" : "Off");
     }
     if (option->id == 'C') {
         if(event == RG_DIALOG_ENTER)
@@ -219,6 +233,14 @@ static dialog_return_t rtc_t_set_cb(dialog_option_t *option, dialog_event_t even
             //use RTCtimeBuf struct to update RTC time
             if(app->dev.port < 254)
             {
+                if(dst_toggled == true)
+                {
+                    //if its DST we need to subtract an hour because the software
+                    //takes care of this elsewhere.
+                    if(RTCtimeBuf.tm_hour == 0) RTCtimeBuf.tm_hour = 23;
+                    else RTCtimeBuf.tm_hour--;
+                }
+                rg_settings_set_int32(SETTING_RTC_DST, dst_toggled);
                 ds3231_set_time(&(app->dev), &RTCtimeBuf);
             }
             else rg_gui_alert("DS3231M",  "Unable to update RTC time!");
@@ -255,7 +277,7 @@ static dialog_return_t rtc_state_cb(dialog_option_t *option, dialog_event_t even
             {202, "Date Format", "...", gui.rtc_enable, &rtc_format_cb},
             {203, "Month Text", "...", gui.rtc_enable, &rtc_month_text_cb},
             {204, "12h or 24h", "...", gui.rtc_enable, &rtc_hour_pref_cb},
-            //{205, "Daylight Savings Time", "...", gui.rtc_enable, &rtc_hour_pref_cb},
+            {205, "DST", "...", gui.rtc_enable, &rtc_dst_cb},
             {206, "Set Date & Time", NULL, gui.rtc_enable, &rtc_set_time_cb},
             RG_DIALOG_CHOICE_LAST
         };
@@ -315,7 +337,9 @@ void retro_loop(i2c_dev_t dev)
     gui.rtc_format = rg_settings_get_int32(SETTING_RTC_FORMAT, 0);
     gui.rtc_month_text = rg_settings_get_int32(SETTING_RTC_MONTH_TXT, 0);
     gui.rtc_hour_pref = rg_settings_get_int32(SETTING_RTC_HOUR_PREF, 0);
+    gui.rtc_dst = rg_settings_get_int32(SETTING_RTC_DST, 0);
     
+    //if the RTC is toggled off while installed, the system will not need to restart if it is toggled on again.
     int last_rtc_enable = gui.rtc_enable;
 
     if (!gui.show_empty)

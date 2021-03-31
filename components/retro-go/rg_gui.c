@@ -27,6 +27,7 @@ static font_info_t font_info = {0, 8, 8, 8, &font_basic8x8};
 
 // static const char *SETTING_FONTSIZE     = "FontSize";
 static const char *SETTING_FONTTYPE     = "FontType";
+static const char *SETTING_RTC_DST      = "RTCdst";
 
 void rg_gui_init(void)
 {
@@ -929,6 +930,15 @@ void rg_gui_draw_time(struct tm time, int x_pos, int y_pos, int format, int mont
     
     //hourPref:  0 = 12h - use 12 hour clock
     //           1 = 24h - use 24 hour clock
+    
+    //TODO: Change text placement depending on font size and type.
+    //Slim down buffers to use minimum number of bytes, is ballparked right now
+    
+    if (rg_settings_get_int32(SETTING_RTC_DST, 0) == 1) //if DST mode is toggled add an hour
+    {
+        if(time.tm_hour == 23) time.tm_hour = 0;
+        else time.tm_hour++;
+    }
     
     char time_buff[72] = { 0 };
     int ampm = 2; //0 for am, 1 for pm, 2 for 24h

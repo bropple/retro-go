@@ -87,6 +87,7 @@ typedef struct {
     int rtc_format;
     int rtc_month_text;
     int rtc_hour_pref;
+    int rtc_dst;
     int last_key;
     gamepad_state_t joystick;
 } retro_gui_t;

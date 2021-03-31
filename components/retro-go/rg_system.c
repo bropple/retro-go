@@ -255,7 +255,7 @@ rg_app_desc_t *rg_system_init(int sampleRate, const rg_emu_proc_t *handlers)
     rg_input_init();
     rg_system_time_init();
     
-    //Start up external RTC - must be enabled first.
+    //Start up external RTC - must be enabled in the settings first.
     if(rg_settings_get_int32(SETTING_RTC_ENABLE, 0) == 1)
     {
         app.dev = rg_rtc_init();
@@ -755,9 +755,10 @@ char * rg_rtc_getDay_text(int wday)
 
 void rg_rtc_debug(struct tm rtcinfo)
 {
+        //This function brings up a GUI alert with all the time information from the RTC.
+    
         char message[36] = { 0 };
         sprintf(message, "%04d/%02d/%02d %02d %02d %02d %03d", rtcinfo.tm_year, rtcinfo.tm_mon + 1, rtcinfo.tm_mday, rtcinfo.tm_hour, rtcinfo.tm_min, rtcinfo.tm_sec, dayOfYear(rtcinfo.tm_year, rtcinfo.tm_mon + 1, rtcinfo.tm_mday));
         rg_display_clear(C_DARK_VIOLET);
         rg_gui_alert("DS3231M",  message);
-        
 }
