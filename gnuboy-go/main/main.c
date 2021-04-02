@@ -69,6 +69,12 @@ static bool load_state_handler(char *pathName)
 
     skipFrames = 0;
     autoSaveSRAM_Timer = 0;
+    
+    //for Pokemon:
+    //Load GB RTC value from the SRAM
+    //Load previously stored HW RTC time
+    //Correlate values and find time differences
+    //Sync the RTC based on the current values
 
     // TO DO: Call rtc_sync() if a physical RTC is present
     rtc_sync(app->dev);
@@ -116,7 +122,7 @@ static dialog_return_t sram_save_now_cb(dialog_option_t *option, dialog_event_t 
     {
         rg_system_set_led(1);
 
-        if (sram_save(sramFile) != 0)
+        if (sram_save(sramFile, app->dev) != 0)
         {
             rg_gui_alert("Save failed!", sramFile);
         }
@@ -226,7 +232,7 @@ static void auto_sram_update(void)
         if (ram.sram_dirty)
         {
             MESSAGE_ERROR("sram still dirty after sram_update(), trying full save...\n");
-            sram_save(sramFile);
+            sram_save(sramFile, app->dev);
         }
         rg_system_set_led(0);
     }
@@ -279,7 +285,7 @@ void app_main(void)
 
     // Load ROM
     rom_load(app->romPath);
-
+    
     // Set palette for non-gbc games (must be after rom_load)
     pal_set_dmg(rg_settings_get_app_int32(SETTING_PALETTE, 0));
 
