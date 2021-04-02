@@ -358,7 +358,9 @@ int sram_save(const char *file, i2c_dev_t dev)
         {
             struct tm RTCtime = rg_rtc_getTime(dev); //get current RTC time
             
-            char * time_buff = calloc(1, 72);
+            char * time_buff = malloc(72);
+            
+            //also check DST flag
             
             sprintf(time_buff, "%02d/%02d/%04d %02d:%02d:%02d", RTCtime.tm_mon + 1, RTCtime.tm_mday, RTCtime.tm_year, RTCtime.tm_hour, RTCtime.tm_min, RTCtime.tm_sec);
             

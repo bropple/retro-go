@@ -940,7 +940,7 @@ void rg_gui_draw_time(struct tm time, int x_pos, int y_pos, int format, int mont
         else time.tm_hour++;
     }
     
-    char time_buff[72] = { 0 };
+    char *time_buff = malloc(72); //[72] = { 0 };
     int ampm = 2; //0 for am, 1 for pm, 2 for 24h
     int time_width = 168;
     int ampm_pos = 230;
@@ -1011,5 +1011,5 @@ void rg_gui_draw_time(struct tm time, int x_pos, int y_pos, int format, int mont
     rg_gui_draw_text(x_pos, y_pos, time_width, time_buff, C_WHITE, C_BLACK, 0);
     if(ampm < 2) rg_gui_draw_text(ampm_pos, y_pos, 16, ampm_text[ampm], C_WHITE, C_BLACK, 0);
     rg_gui_draw_text(day_pos, y_pos, 24, rg_rtc_getDay_text(time.tm_wday), C_WHITE, C_BLACK, 0);
-
+    free(time_buff);
 }
