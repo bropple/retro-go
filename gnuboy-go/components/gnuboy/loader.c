@@ -43,6 +43,8 @@ static FILE *fpSramFile = NULL;
 #define I4(s, p) { 4, s, p }
 #define END { 0, "\0\0\0\0", 0 }
 
+const char * RTC_GB_HW_TIME = "RTCsaveTime";
+
 typedef struct
 {
 	int len;
@@ -333,7 +335,7 @@ int sram_load(const char *file)
 }
 
 
-int sram_save(const char *file)
+int sram_save(const char *file, i2c_dev_t dev)
 {
 	int ret = -1;
 	FILE *f;
@@ -351,6 +353,22 @@ int sram_save(const char *file)
 			ret = 0;
 		}
 		fclose(f);
+        
+        if(dev.port < 254) //if RTC is present then we save the current RTC time to the JSON file.
+        {
+            struct tm RTCtime = rg_rtc_getTime(dev); //get current RTC time
+            
+            char * time_buff = malloc(72);
+            
+            //also check DST flag
+            
+            sprintf(time_buff, "%02d/%02d/%04d %02d:%02d:%02d", RTCtime.tm_mon + 1, RTCtime.tm_mday, RTCtime.tm_year, RTCtime.tm_hour, RTCtime.tm_min, RTCtime.tm_sec);
+            
+            rg_settings_set_string(RTC_GB_HW_TIME, time_buff);
+            rg_settings_save();
+            free(time_buff);
+        }
+        
 	}
 
 	return ret;

@@ -267,7 +267,7 @@ static inline void ASL8 (uint32 OpAddress)
 	SetZN8(Work8);
 }
 
-static inline void BIT16 (uint16 Work16)
+static inline void BITS16 (uint16 Work16)
 {
 	ClearFlags(Overflow|Negative|Zero);
 	SetFlags((Work16 >> 8) & (0x40|0x80));
@@ -275,7 +275,7 @@ static inline void BIT16 (uint16 Work16)
 		SetFlags(Zero);
 }
 
-static inline void BIT8 (uint8 Work8)
+static inline void BITS8 (uint8 Work8)
 {
 	ClearFlags(Overflow|Negative|Zero);
 	SetFlags(Work8 & (0x40|0x80));

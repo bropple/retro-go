@@ -15,6 +15,8 @@
 #define AUDIO_SAMPLE_RATE   (32000)
 #define AUDIO_BUFFER_LENGTH (AUDIO_SAMPLE_RATE / 16 + 1)
 
+static const char *SETTING_RTC_ENABLE = "RTCenable";
+
 static short audioBuffer[AUDIO_BUFFER_LENGTH * 2];
 
 static rg_video_frame_t frames[2];
@@ -36,7 +38,6 @@ static bool netplay = false;
 static const char *SETTING_SAVESRAM = "SaveSRAM";
 static const char *SETTING_PALETTE  = "Palette";
 // --- MAIN
-
 
 static bool save_state_handler(char *pathName)
 {
@@ -60,7 +61,7 @@ static bool load_state_handler(char *pathName)
     {
         // If a state fails to load then we should behave as we do on boot
         // which is a hard reset and load sram if present
-        emu_reset(true);
+        emu_reset(true, app->dev);
         sram_load(sramFile);
 
         return false;
@@ -68,14 +69,21 @@ static bool load_state_handler(char *pathName)
 
     skipFrames = 0;
     autoSaveSRAM_Timer = 0;
+    
+    //for Pokemon:
+    //Load GB RTC value from the SRAM
+    //Load previously stored HW RTC time
+    //Correlate values and find time differences
+    //Sync the RTC based on the current values
 
     // TO DO: Call rtc_sync() if a physical RTC is present
+    rtc_sync(app->dev);
     return true;
 }
 
 static bool reset_handler(bool hard)
 {
-    emu_reset(hard);
+    emu_reset(hard, app->dev);
 
     fullFrame = false;
     skipFrames = 20;
@@ -114,7 +122,7 @@ static dialog_return_t sram_save_now_cb(dialog_option_t *option, dialog_event_t 
     {
         rg_system_set_led(1);
 
-        if (sram_save(sramFile) != 0)
+        if (sram_save(sramFile, app->dev) != 0)
         {
             rg_gui_alert("Save failed!", sramFile);
         }
@@ -193,7 +201,7 @@ static dialog_return_t advanced_settings_cb(dialog_option_t *option, dialog_even
 {
     if (event == RG_DIALOG_ENTER) {
         dialog_option_t options[] = {
-            {101, "Set clock", "00:00", 1, &rtc_update_cb},
+            {101, "Set clock", "00:00", !(rg_settings_get_int32(SETTING_RTC_ENABLE, 0)), &rtc_update_cb},
             RG_DIALOG_SEPARATOR,
             {111, "Auto save SRAM", "Off", mbc.batt && mbc.ramsize, &sram_autosave_cb},
             {112, "Save SRAM now ", NULL, mbc.batt && mbc.ramsize, &sram_save_now_cb},
@@ -214,7 +222,7 @@ static void screen_blit(void)
     currentUpdate = previousUpdate;
     fb.ptr = currentUpdate->buffer;
 }
-
+    
 static void auto_sram_update(void)
 {
     if (autoSaveSRAM > 0 && ram.sram_dirty)
@@ -224,11 +232,33 @@ static void auto_sram_update(void)
         if (ram.sram_dirty)
         {
             MESSAGE_ERROR("sram still dirty after sram_update(), trying full save...\n");
-            sram_save(sramFile);
+            sram_save(sramFile, app->dev);
         }
         rg_system_set_led(0);
     }
 }
+
+// void DS3231_InjectRTC(i2c_dev_t dev){
+//     
+//     this function 'hijacks' the RTC of the emulator once to overwrite the 
+//     DS3231's time values over the GB's. The emulator keeps it ticking on its own while it runs.
+//     
+//     NOTE: The injection WILL NOT WORK if esp-idf
+//     isn't patched!
+//     
+//     Going to move this function and make it a part of rtc_sync();
+//     
+//     struct tm rtcinfo = rg_rtc_getTime(dev);
+//     
+//     rtc.d = dayOfYear(rtcinfo.tm_year, rtcinfo.tm_mon + 1, rtcinfo.tm_mday);
+//     rtc.h = rtcinfo.tm_hour;
+//     rtc.m = rtcinfo.tm_min;
+//     rtc.s = rtcinfo.tm_sec;
+//     
+//    RG_LOGE("RTC values have been injected.\n");
+//    
+//    rg_gui_alert("DS3231M",  "RTC values have been injected.");
+// }
 
 void app_main(void)
 {
@@ -255,7 +285,7 @@ void app_main(void)
 
     // Load ROM
     rom_load(app->romPath);
-
+    
     // Set palette for non-gbc games (must be after rom_load)
     pal_set_dmg(rg_settings_get_app_int32(SETTING_PALETTE, 0));
 
@@ -277,7 +307,7 @@ void app_main(void)
     pcm.buf = (n16 *)&audioBuffer;
     pcm.pos = 0;
 
-    emu_init();
+    emu_init(app->dev);
 
     if (app->startAction == RG_START_ACTION_RESUME)
     {

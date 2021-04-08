@@ -2,6 +2,8 @@
 Retro-Go is a launcher and framework to run emulators on the ODROID-GO and compatible ESP32(-S2) devices. 
 It comes with many emulators!
 
+This fork includes support for the DS3231M I2C real-time clock chip. The date and time is displayed in the main menu with a few selectable formats, and time will be synced with Game Boy Color games that use RTC functionality (Partial functionality).
+
 ### Supported systems:
 - NES
 - Gameboy
@@ -15,8 +17,10 @@ It comes with many emulators!
 
 ### Retro-Go features:
 - In-game menu
+- Main-menu time display
 - Favorites support
 - GB RTC adjust and save
+- GB DS3231M RTC syncrhonization (In progress)
 - GB GBC colorization palettes
 - More scaling options
 - Bilinear filtering
@@ -156,6 +160,7 @@ I don't want to maintain non-ESP32 ports in this repository but let me know if I
 - The SNES emulator is a port of [Snes9x](https://github.com/snes9xgit/snes9x/).
 - PNG support is provided by [luPng](https://github.com/jansol/LuPng) and miniz.
 - PCE cover art is from Christian_Haitian.
+- [nopnop2002](https://github.com/nopnop2002/esp-idf-ds3231) for DS3231M library.
 
 
 # License
@@ -163,3 +168,4 @@ Everything in this project is licensed under the [GPLv2 license](COPYING) with t
 - components/lupng (PNG library, MIT)
 - components/retro-go (Retro-Go's framework, MIT)
 - handy-go/components/handy (Lynx emulator, BSD)
+- components/retro-go/rg_ds3231.c, rg_ds3231.h, rg_i2cdev.c and rg_i2cdev.h (DS3231M library, MIT)

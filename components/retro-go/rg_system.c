@@ -34,6 +34,7 @@
 #define SETTING_ROM_FILE_PATH "RomFilePath"
 #define SETTING_START_ACTION  "StartAction"
 #define SETTING_STARTUP_APP   "StartupApp"
+#define SETTING_RTC_ENABLE    "RTCenable"
 
 typedef struct
 {
@@ -253,6 +254,15 @@ rg_app_desc_t *rg_system_init(int sampleRate, const rg_emu_proc_t *handlers)
     rg_audio_init(sampleRate);
     rg_input_init();
     rg_system_time_init();
+    
+    //Start up external RTC - must be enabled in the settings first.
+    if(rg_settings_get_int32(SETTING_RTC_ENABLE, 0) == 1)
+    {
+        app.dev = rg_rtc_init();
+        RG_LOGE("DS3231M is initialized.\n");
+    }
+    else app.dev.port = 254; //disabled
+    //rg_rtc_debug(rg_rtc_getTime(dev));
 
     if (esp_reset_reason() == ESP_RST_PANIC)
     {
@@ -630,11 +640,12 @@ void rg_system_set_startup_app(int32_t value)
 IRAM_ATTR void rg_spi_lock_acquire(spi_lock_res_t owner)
 {
 #if USE_SPI_MUTEX
-    if (owner == spiMutexOwner)
-    {
-        return;
-    }
-    else if (xSemaphoreTake(spiMutex, pdMS_TO_TICKS(10000)) == pdPASS)
+    // if (owner == spiMutexOwner)
+    // {
+    //     return;
+    // }
+    // else
+    if (xSemaphoreTake(spiMutex, pdMS_TO_TICKS(10000)) == pdPASS)
     {
         spiMutexOwner = owner;
     }
@@ -648,7 +659,7 @@ IRAM_ATTR void rg_spi_lock_acquire(spi_lock_res_t owner)
 IRAM_ATTR void rg_spi_lock_release(spi_lock_res_t owner)
 {
 #if USE_SPI_MUTEX
-    if (owner == spiMutexOwner || owner == SPI_LOCK_ANY)
+    // if (owner == spiMutexOwner || owner == SPI_LOCK_ANY)
     {
         xSemaphoreGive(spiMutex);
         spiMutexOwner = SPI_LOCK_ANY;
@@ -695,4 +706,60 @@ void *rg_alloc(size_t size, uint32_t mem_type)
 void rg_free(void *ptr)
 {
     return heap_caps_free(ptr);
+}
+
+i2c_dev_t rg_rtc_init(void)
+{
+    //this will initialize the DS3231M RTC every time the launcher is started.
+    //Error message only pops up if there's a problem with initializing the RTC.
+    
+    i2c_dev_t dev;
+    
+    if (ds3231_init_desc(&dev, I2C_NUM_0, 15, 4) != ESP_OK) {
+        rg_display_clear(C_RED);
+        rg_gui_alert("DS3231M", "RTC init FAIL - Disabling.");
+        rg_settings_set_int32("RTCstate", 0);
+        dev.port = 255; //an out-of-range value for an I2C address, so we know it errored
+    }
+    
+    return dev;
+    
+}
+
+struct tm rg_rtc_getTime(i2c_dev_t dev)
+{
+    struct tm time = { 0 };
+    
+    if (ds3231_get_time(&dev, &time) != ESP_OK) {
+        rg_display_clear(C_RED);
+        rg_gui_alert("DS3231M",  "Could not get time.");
+    }
+    return time;
+}
+
+char * months_EN[13] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Err" };
+char * days_EN[8] = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun", "Err"};
+uint8_t daysInMonth[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+
+char * rg_rtc_getMonth_text(int month)
+{
+    if(month < 12) return months_EN[month]; //return month in text form
+    else return months_EN[12]; //An error has occured
+}
+
+char * rg_rtc_getDay_text(int wday)
+{
+    if(wday < 7) return days_EN[wday]; //return day in text form
+    else return days_EN[7]; //An error has occured
+}
+
+void rg_rtc_debug(struct tm rtcinfo)
+{
+        //This function brings up a GUI alert with all the time information from the RTC.
+    
+        char *message = malloc(36); //[36] = { 0 };
+        sprintf(message, "%04d/%02d/%02d %02d %02d %02d %03d", rtcinfo.tm_year, rtcinfo.tm_mon + 1, rtcinfo.tm_mday, rtcinfo.tm_hour, rtcinfo.tm_min, rtcinfo.tm_sec, dayOfYear(rtcinfo.tm_year, rtcinfo.tm_mon + 1, rtcinfo.tm_mday));
+        rg_display_clear(C_DARK_VIOLET);
+        rg_gui_alert("DS3231M",  message);
+        free(message);
 }

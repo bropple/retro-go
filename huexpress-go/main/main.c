@@ -251,6 +251,7 @@ void osd_snd_init(void)
 {
     host.sound.stereo = true;
     host.sound.sample_freq = AUDIO_SAMPLE_RATE;
+    
     host.sound.sample_uint8 = rg_settings_get_app_int32(SETTING_AUDIOTYPE, 0);
 
     xTaskCreatePinnedToCore(&audioTask, "audioTask", 1024 * 2, NULL, 5, NULL, 1);

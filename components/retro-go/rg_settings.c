@@ -194,7 +194,6 @@ void rg_settings_set_int32(const char *key, int32_t value)
 char *rg_settings_get_string(const char *key, const char *default_value)
 {
     cJSON *obj = json_get(root, key);
-
     if (obj && obj->valuestring)
         return strdup(obj->valuestring);
 
