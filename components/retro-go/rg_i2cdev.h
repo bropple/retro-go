@@ -11,7 +11,9 @@ typedef struct {
     uint8_t addr;               // I2C address
     gpio_num_t sda_io_num;      // GPIO number for I2C sda signal
     gpio_num_t scl_io_num;      // GPIO number for I2C scl signal
-        uint32_t clk_speed;             // I2C clock frequency for master mode
+    uint32_t clk_speed;         // I2C clock frequency for master mode
+    bool enabled;               // True if the I2C device is to be used
+    bool errored;               // True if the I2C device encountered an error
 } i2c_dev_t;
 
 esp_err_t i2c_master_init(i2c_port_t port, int sda, int scl);

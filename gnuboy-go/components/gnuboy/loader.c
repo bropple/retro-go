@@ -334,6 +334,29 @@ int sram_load(const char *file)
 	return ret;
 }
 
+bool DS3231saveTimeStamp(i2c_dev_t dev){ //save the current time to the JSON file
+    if(dev.enabled == true && dev.errored == false) //if RTC is present/enabled, we save the current RTC time to the JSON file.
+        {
+            struct tm RTCtime = rg_rtc_getTime(dev); //get current RTC time
+            
+            char * time_buff = malloc(72);
+            
+            //also check DST flag
+            
+            sprintf(time_buff, "%02d/%02d/%04d %02d:%02d:%02d", RTCtime.tm_mon + 1, RTCtime.tm_mday, RTCtime.tm_year, RTCtime.tm_hour, RTCtime.tm_min, RTCtime.tm_sec);
+            
+            rg_settings_set_string(RTC_GB_HW_TIME, time_buff);
+            rg_settings_save();
+            free(time_buff);
+            RG_LOGI("DS3231M: Timestamp saved to JSON.\n");
+            return true;
+        }
+    else {
+        RG_LOGE("DS3231M: Timestamp not saved to JSON.\n");
+        return false;
+    }
+}
+
 
 int sram_save(const char *file, i2c_dev_t dev)
 {
@@ -353,29 +376,14 @@ int sram_save(const char *file, i2c_dev_t dev)
 			ret = 0;
 		}
 		fclose(f);
-        
-        if(dev.port < 254) //if RTC is present then we save the current RTC time to the JSON file.
-        {
-            struct tm RTCtime = rg_rtc_getTime(dev); //get current RTC time
-            
-            char * time_buff = malloc(72);
-            
-            //also check DST flag
-            
-            sprintf(time_buff, "%02d/%02d/%04d %02d:%02d:%02d", RTCtime.tm_mon + 1, RTCtime.tm_mday, RTCtime.tm_year, RTCtime.tm_hour, RTCtime.tm_min, RTCtime.tm_sec);
-            
-            rg_settings_set_string(RTC_GB_HW_TIME, time_buff);
-            rg_settings_save();
-            free(time_buff);
-        }
-        
+        DS3231saveTimeStamp(dev);
 	}
 
 	return ret;
 }
 
 
-int sram_update(const char *file)
+int sram_update(const char *file, i2c_dev_t dev)
 {
 	if (!mbc.batt || !mbc.ramsize || !file || !*file)
 		return -1;
@@ -414,6 +422,7 @@ int sram_update(const char *file)
 	if (fseek(fp, mbc.ramsize * 8192, SEEK_SET) == 0)
 	{
 		rtc_save(fp);
+        DS3231saveTimeStamp(dev);
 	}
 
 _cleanup:
@@ -450,7 +459,7 @@ _cleanup:
  *
  */
 
-int state_save(const char *file)
+int state_save(const char *file, i2c_dev_t dev)
 {
 	byte *buf = calloc(1, 4096);
 	if (!buf) return -2;
@@ -507,7 +516,8 @@ int state_save(const char *file)
 
 	fclose(fp);
 	free(buf);
-
+    DS3231saveTimeStamp(dev);
+    
 	return 0;
 
 _error:

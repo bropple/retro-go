@@ -41,7 +41,7 @@ static const char *SETTING_PALETTE  = "Palette";
 
 static bool save_state_handler(char *pathName)
 {
-    if (state_save(pathName) == 0)
+    if (state_save(pathName, app->dev) == 0)
     {
         char *filename = rg_emu_get_path(RG_PATH_SCREENSHOT, 0);
         if (filename)
@@ -228,7 +228,7 @@ static void auto_sram_update(void)
     if (autoSaveSRAM > 0 && ram.sram_dirty)
     {
         rg_system_set_led(1);
-        sram_update(sramFile);
+        sram_update(sramFile, app->dev);
         if (ram.sram_dirty)
         {
             MESSAGE_ERROR("sram still dirty after sram_update(), trying full save...\n");

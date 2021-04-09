@@ -507,8 +507,8 @@ void retro_loop(i2c_dev_t dev)
             rg_system_restart();
         }
         
-        //Draw the time in the main menu, only if RTC is enabled
-        if(rg_settings_get_int32(SETTING_RTC_ENABLE, gui.rtc_enable) == 1)
+        //Draw the time in the main menu, only if RTC is enabled in settings AND the i2c device hasn't errored
+        if((rg_settings_get_int32(SETTING_RTC_ENABLE, gui.rtc_enable) == 1) && dev.errored == false)
         {
             rg_gui_draw_time(rg_rtc_getTime(dev), 58, 0, gui.rtc_format, gui.rtc_month_text, gui.rtc_hour_pref);
             RTCtimeBuf = rg_rtc_getTime(dev);

@@ -256,12 +256,7 @@ rg_app_desc_t *rg_system_init(int sampleRate, const rg_emu_proc_t *handlers)
     rg_system_time_init();
     
     //Start up external RTC - must be enabled in the settings first.
-    if(rg_settings_get_int32(SETTING_RTC_ENABLE, 0) == 1)
-    {
-        app.dev = rg_rtc_init();
-        RG_LOGE("DS3231M is initialized.\n");
-    }
-    else app.dev.port = 254; //disabled
+    app.dev = rg_rtc_init();
     //rg_rtc_debug(rg_rtc_getTime(dev));
 
     if (esp_reset_reason() == ESP_RST_PANIC)
@@ -714,25 +709,43 @@ i2c_dev_t rg_rtc_init(void)
     //Error message only pops up if there's a problem with initializing the RTC.
     
     i2c_dev_t dev;
+    if(rg_settings_get_int32(SETTING_RTC_ENABLE, 0) == 1)
+    {
     
-    if (ds3231_init_desc(&dev, I2C_NUM_0, 15, 4) != ESP_OK) {
-        rg_display_clear(C_RED);
-        rg_gui_alert("DS3231M", "RTC init FAIL - Disabling.");
-        rg_settings_set_int32("RTCstate", 0);
-        dev.port = 255; //an out-of-range value for an I2C address, so we know it errored
+        if (ds3231_init_desc(&dev, I2C_NUM_0, 15, 4) != ESP_OK)
+        {
+            rg_display_clear(C_RED);
+            rg_gui_alert("DS3231M", "RTC initialization failed!\n Check your HW installation.\n Re-enable in settings.");
+            dev.enabled = false;
+            dev.errored = true;
+            rg_settings_set_int32("RTCstate", 0);
+            rg_settings_save();
+            return dev;
+        }
     }
-    
+    else
+    {
+        RG_LOGI("DS3231M: Disabled in settings - will not initialize.");
+        dev.enabled = false;
+    }
+    RG_LOGI("DS3231M: Initialized!\n");
     return dev;
-    
 }
 
 struct tm rg_rtc_getTime(i2c_dev_t dev)
 {
     struct tm time = { 0 };
     
-    if (ds3231_get_time(&dev, &time) != ESP_OK) {
-        rg_display_clear(C_RED);
-        rg_gui_alert("DS3231M",  "Could not get time.");
+    if(rg_settings_get_int32(SETTING_RTC_ENABLE, 0) == 1)
+    {
+        if (ds3231_get_time(&dev, &time) != ESP_OK) {
+            rg_display_clear(C_RED);
+            rg_gui_alert("DS3231M",  "ERROR: Failed to get time!\n Check your HW installation.\n Re-enable in settings.");
+            dev.enabled = false;
+            dev.errored = true;
+            rg_settings_set_int32("RTCstate", 0);
+            rg_settings_save();
+        }
     }
     return time;
 }
