@@ -750,18 +750,16 @@ struct tm rg_rtc_getTime(i2c_dev_t dev)
     return time;
 }
 
-char * months_EN[13] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Err" };
-char * days_EN[8] = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun", "Err"};
-uint8_t daysInMonth[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
-
 char * rg_rtc_getMonth_text(int month)
 {
+    char * months_EN[13] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Err" };
     if(month < 12) return months_EN[month]; //return month in text form
     else return months_EN[12]; //An error has occured
 }
 
 char * rg_rtc_getDay_text(int wday)
 {
+    char * days_EN[8] = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun", "Err"};
     if(wday < 7) return days_EN[wday]; //return day in text form
     else return days_EN[7]; //An error has occured
 }

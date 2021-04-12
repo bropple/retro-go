@@ -186,6 +186,7 @@ static dialog_return_t rtc_t_set_cb(dialog_option_t *option, dialog_event_t even
         if (event == RG_DIALOG_NEXT && ++RTCtimeBuf.tm_mon > 11) RTCtimeBuf.tm_mon = 0;
         char * values[12] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
         strcpy(option->value, values[RTCtimeBuf.tm_mon]);
+        free(values);
     }
     if(option->id == 'd') {
         uint8_t daysInMonth[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
@@ -218,7 +219,7 @@ static dialog_return_t rtc_t_set_cb(dialog_option_t *option, dialog_event_t even
     if (option->id == 'T') {
         if (event == RG_DIALOG_PREV || event == RG_DIALOG_NEXT) {
             dst_toggled = dst_toggled ? 0 : 1;
-            //rg_settings_set_int32(SETTING_RTC_DST, gui.rtc_dst);
+            rg_settings_set_int32(SETTING_RTC_DST, gui.rtc_dst);
         }
         strcpy(option->value, dst_toggled ? "On" : "Off");
     }
@@ -235,8 +236,8 @@ static dialog_return_t rtc_t_set_cb(dialog_option_t *option, dialog_event_t even
             {
                 if(dst_toggled == true)
                 {
-                    //if its DST we need to subtract an hour because the software
-                    //takes care of this elsewhere.
+                    //if its DST we need to subtract an hour now because the software
+                    //normally takes care of this elsewhere.
                     if(RTCtimeBuf.tm_hour == 0) RTCtimeBuf.tm_hour = 23;
                     else RTCtimeBuf.tm_hour--;
                 }

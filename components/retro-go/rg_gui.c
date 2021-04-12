@@ -986,7 +986,7 @@ void rg_gui_draw_time(struct tm time, int x_pos, int y_pos, int format, int mont
         else time.tm_hour++;
     }
     
-    char *time_buff = malloc(72); //[72] = { 0 };
+    char *time_buff = malloc(72);
     int ampm = 2; //0 for am, 1 for pm, 2 for 24h
     int time_width = 168;
     int ampm_pos = 230;
@@ -1026,7 +1026,7 @@ void rg_gui_draw_time(struct tm time, int x_pos, int y_pos, int format, int mont
     else //we have month text
     {
         //These formats show month text instead of number, so we grab the text
-        char time_temp[36] = { 0 }; //temporary buffer
+        char * time_temp = malloc(36);
         if (format == 0)
         {
             //Month, Day, Year
@@ -1052,6 +1052,7 @@ void rg_gui_draw_time(struct tm time, int x_pos, int y_pos, int format, int mont
             sprintf(time_temp, " %02d %02d:%02d:%02d", time.tm_mday, time.tm_hour, time.tm_min, time.tm_sec); //fill in rest of date info
             strcat(time_buff, time_temp); //final date string
         }
+        free(time_temp);
     }
     
     rg_gui_draw_text(x_pos, y_pos, time_width, time_buff, C_WHITE, C_BLACK, 0);

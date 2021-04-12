@@ -24,7 +24,7 @@ extern "C" {
 //DS3231M Includes, requires I2C
 #include "rg_ds3231.h"
 #include "rg_i2cdev.h"
-
+    
 typedef enum
 {
     RG_MSG_SHUTDOWN,
