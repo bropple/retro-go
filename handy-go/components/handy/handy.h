@@ -1,5 +1,5 @@
 #undef INTSET
-#undef PS
+#undef PSR
 
 #include "system.h"
 #include "lynxdef.h"
