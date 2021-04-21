@@ -35,6 +35,7 @@ static bool netplay = false;
 
 static const char *SETTING_SAVESRAM = "SaveSRAM";
 static const char *SETTING_PALETTE  = "Palette";
+static const char *SETTING_RTC_ENABLE = "RTCenable";
 // --- MAIN
 
 
@@ -45,7 +46,7 @@ static bool screenshot_handler(const char *filename, int width, int height)
 
 static bool save_state_handler(const char *filename)
 {
-    return state_save(filename) == 0;
+    return state_save(filename, app->dev) == 0;
 }
 
 static bool load_state_handler(const char *filename)
@@ -54,7 +55,7 @@ static bool load_state_handler(const char *filename)
     {
         // If a state fails to load then we should behave as we do on boot
         // which is a hard reset and load sram if present
-        emu_reset(true);
+        emu_reset(true, app->dev);
         sram_load(sramFile);
 
         return false;
@@ -69,7 +70,7 @@ static bool load_state_handler(const char *filename)
 
 static bool reset_handler(bool hard)
 {
-    emu_reset(hard);
+    emu_reset(hard, app->dev);
 
     fullFrame = false;
     skipFrames = 20;
@@ -108,7 +109,7 @@ static dialog_return_t sram_save_now_cb(dialog_option_t *option, dialog_event_t 
     {
         rg_system_set_led(1);
 
-        if (sram_save(sramFile) != 0)
+        if (sram_save(sramFile, app->dev) != 0)
         {
             rg_gui_alert("Save failed!", sramFile);
         }
@@ -214,11 +215,11 @@ static void auto_sram_update(void)
     if (autoSaveSRAM > 0 && ram.sram_dirty)
     {
         rg_system_set_led(1);
-        sram_update(sramFile);
+        sram_update(sramFile, app->dev);
         if (ram.sram_dirty)
         {
             MESSAGE_ERROR("sram still dirty after sram_update(), trying full save...\n");
-            sram_save(sramFile);
+            sram_save(sramFile, app->dev);
         }
         rg_system_set_led(0);
     }
@@ -272,7 +273,7 @@ void app_main(void)
     pcm.buf = (n16 *)&audioBuffer;
     pcm.pos = 0;
 
-    emu_init();
+    emu_init(app->dev);
 
     if (app->startAction == RG_START_ACTION_RESUME)
     {

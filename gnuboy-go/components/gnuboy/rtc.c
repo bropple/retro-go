@@ -12,16 +12,16 @@ rtc_t rtc;
 #define RT_BASE 1893456000
 
 
-void rtc_reset(bool hard)
+void rtc_reset(bool hard, i2c_dev_t dev)
 {
 	if (hard)
 	{
 		memset(&rtc, 0, sizeof(rtc));
-		rtc_sync();
+		rtc_sync(dev);
 	}
 }
 
-void rtc_sync()
+void rtc_sync(i2c_dev_t dev)
 {
 	time_t timer = time(NULL);
 	struct tm *info = localtime(&timer);
