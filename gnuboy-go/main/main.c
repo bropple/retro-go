@@ -46,7 +46,7 @@ static bool screenshot_handler(const char *filename, int width, int height)
 
 static bool save_state_handler(const char *filename)
 {
-    return state_save(filename, app->dev) == 0;
+    return state_save(filename) == 0;
 }
 
 static bool load_state_handler(const char *filename)
@@ -64,7 +64,10 @@ static bool load_state_handler(const char *filename)
     skipFrames = 0;
     autoSaveSRAM_Timer = 0;
 
-    // TO DO: Call rtc_sync() if a physical RTC is present
+    if((strcmp(rom.name, "PM_CRYSTAL") == 0 || strcmp(rom.name, "POKEMON_SLVAAXE▒") == 0 || strcmp(rom.name, "POKEMON_GLDAAUE▒") == 0) && (rg_settings_get_int32(SETTING_RTC_ENABLE, 0) == 1)){
+        RG_LOGI("Pokemon game detected! Syncing DS3231M...\n");
+        DS3231_pokeTimeUpdate(app->dev);
+    }
     return true;
 }
 
@@ -75,6 +78,11 @@ static bool reset_handler(bool hard)
     fullFrame = false;
     skipFrames = 20;
     autoSaveSRAM_Timer = 0;
+    
+    if((strcmp(rom.name, "PM_CRYSTAL") == 0 || strcmp(rom.name, "POKEMON_SLVAAXE▒") == 0 || strcmp(rom.name, "POKEMON_GLDAAUE▒") == 0) && (rg_settings_get_int32(SETTING_RTC_ENABLE, 0) == 1)){
+        RG_LOGI("Pokemon game detected! Syncing DS3231M...\n");
+        DS3231_pokeTimeUpdate(app->dev);
+    }
 
     return true;
 }
@@ -109,7 +117,7 @@ static dialog_return_t sram_save_now_cb(dialog_option_t *option, dialog_event_t 
     {
         rg_system_set_led(1);
 
-        if (sram_save(sramFile, app->dev) != 0)
+        if (sram_save(sramFile) != 0)
         {
             rg_gui_alert("Save failed!", sramFile);
         }
@@ -163,8 +171,6 @@ static dialog_return_t rtc_t_update_cb(dialog_option_t *option, dialog_event_t e
         sprintf(option->value, "%02d", rtc.s);
     }
 
-    // TO DO: Update system clock
-
     return RG_DIALOG_IGNORE;
 }
 
@@ -184,11 +190,21 @@ static dialog_return_t rtc_update_cb(dialog_option_t *option, dialog_event_t eve
     return RG_DIALOG_IGNORE;
 }
 
+static dialog_return_t rtc_syncNow_cb(dialog_option_t *option, dialog_event_t event)
+{
+    if((strcmp(rom.name, "PM_CRYSTAL") == 0 || strcmp(rom.name, "POKEMON_SLVAAXE▒") == 0 || strcmp(rom.name, "POKEMON_GLDAAUE▒") == 0) && (rg_settings_get_int32(SETTING_RTC_ENABLE, 0) == 1)){
+        RG_LOGI("Pokemon game detected! Force syncing RTC...\n");
+        DS3231_pokeTimeUpdate(app->dev);
+    }
+    return RG_DIALOG_ENTER;
+}
+
 static dialog_return_t advanced_settings_cb(dialog_option_t *option, dialog_event_t event)
 {
     if (event == RG_DIALOG_ENTER) {
         dialog_option_t options[] = {
-            {101, "Set clock", "00:00", 1, &rtc_update_cb},
+            {101, "Set clock", "00:00", !(rg_settings_get_int32(SETTING_RTC_ENABLE, 0)), &rtc_update_cb},
+            {102, "Sync RTC Now", NULL, (rg_settings_get_int32(SETTING_RTC_ENABLE, 0)), &rtc_syncNow_cb},
             RG_DIALOG_SEPARATOR,
             {111, "Auto save SRAM", "Off", mbc.batt && mbc.ramsize, &sram_autosave_cb},
             {112, "Save SRAM now ", NULL, mbc.batt && mbc.ramsize, &sram_save_now_cb},
@@ -215,11 +231,11 @@ static void auto_sram_update(void)
     if (autoSaveSRAM > 0 && ram.sram_dirty)
     {
         rg_system_set_led(1);
-        sram_update(sramFile, app->dev);
+        sram_update(sramFile);
         if (ram.sram_dirty)
         {
             MESSAGE_ERROR("sram still dirty after sram_update(), trying full save...\n");
-            sram_save(sramFile, app->dev);
+            sram_save(sramFile);
         }
         rg_system_set_led(0);
     }
@@ -282,6 +298,11 @@ void app_main(void)
     else
     {
         sram_load(sramFile);
+    }
+    
+    if((strcmp(rom.name, "PM_CRYSTAL") == 0 || strcmp(rom.name, "POKEMON_SLVAAXE▒") == 0 || strcmp(rom.name, "POKEMON_GLDAAUE▒") == 0) && (rg_settings_get_int32(SETTING_RTC_ENABLE, 0) == 1)){
+        RG_LOGI("Pokemon game detected! Syncing DS3231M...\n");
+        DS3231_pokeTimeUpdate(app->dev);
     }
 
     while (true)

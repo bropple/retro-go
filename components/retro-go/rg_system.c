@@ -798,8 +798,8 @@ void rg_rtc_debug(struct tm rtcinfo)
 {
         //This function brings up a GUI alert with all the time information from the RTC.
 
-        char *message = malloc(36); //[36] = { 0 };
-        sprintf(message, "%04d/%02d/%02d %02d %02d %02d %03d", rtcinfo.tm_year, rtcinfo.tm_mon + 1, rtcinfo.tm_mday, rtcinfo.tm_hour, rtcinfo.tm_min, rtcinfo.tm_sec, dayOfYear(rtcinfo.tm_year, rtcinfo.tm_mon + 1, rtcinfo.tm_mday));
+        char *message = malloc(39); //[36] = { 0 };
+        sprintf(message, "%04d/%02d/%02d %02d %02d %02d %02d %03d", rtcinfo.tm_year, rtcinfo.tm_mon + 1, rtcinfo.tm_mday, rtcinfo.tm_wday, rtcinfo.tm_hour, rtcinfo.tm_min, rtcinfo.tm_sec, dayOfYear(rtcinfo.tm_year, rtcinfo.tm_mon + 1, rtcinfo.tm_mday));
         rg_display_clear(C_DARK_VIOLET);
         rg_gui_alert("DS3231M",  message);
         free(message);

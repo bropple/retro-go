@@ -574,10 +574,3 @@ void mem_reset(bool hard)
 	mbc.enableram = 0;
 	mem_updatemap();
 }
-
-bool save_monitor() {
-    
-    /*  The purpose of this function is to monitor 
-     * 
-     */
-}

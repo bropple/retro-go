@@ -27,6 +27,8 @@ void rtc_tick();
 void rtc_reset(bool hard, i2c_dev_t dev);
 void rtc_sync();
 
+bool DS3231_pokeTimeUpdate(i2c_dev_t dev);
+
 #endif
 
 

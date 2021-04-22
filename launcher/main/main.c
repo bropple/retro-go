@@ -143,7 +143,7 @@ static dialog_return_t rtc_enable_cb(dialog_option_t *option, dialog_event_t eve
     }
     strcpy(option->value, gui.rtc_enable ? "On" : "Off");
 
-    return RG_DIALOG_IGNORE;
+    return RG_DIALOG_ENTER;
 }
 
 static dialog_return_t rtc_format_cb(dialog_option_t *option, dialog_event_t event)
@@ -158,7 +158,7 @@ static dialog_return_t rtc_format_cb(dialog_option_t *option, dialog_event_t eve
     }
     const char *values[] = {"MDY", "DMY", "YMD"};
     strcpy(option->value, values[gui.rtc_format % 3]);
-    return RG_DIALOG_IGNORE;
+    return RG_DIALOG_ENTER;
 }
 
 static dialog_return_t rtc_month_text_cb(dialog_option_t *option, dialog_event_t event)
@@ -168,7 +168,7 @@ static dialog_return_t rtc_month_text_cb(dialog_option_t *option, dialog_event_t
         rg_settings_set_int32(SETTING_RTC_MONTH_TXT, gui.rtc_month_text);
     }
     strcpy(option->value, gui.rtc_month_text ? "On" : "Off");
-    return RG_DIALOG_IGNORE;
+    return RG_DIALOG_ENTER;
 }
 
 static dialog_return_t rtc_hour_pref_cb(dialog_option_t *option, dialog_event_t event)
@@ -178,7 +178,7 @@ static dialog_return_t rtc_hour_pref_cb(dialog_option_t *option, dialog_event_t 
         rg_settings_set_int32(SETTING_RTC_HOUR_PREF, gui.rtc_hour_pref);
     }
     strcpy(option->value, gui.rtc_hour_pref ? "24h" : "12h");
-    return RG_DIALOG_IGNORE;
+    return RG_DIALOG_ENTER;
 }
 
 static dialog_return_t rtc_dst_cb(dialog_option_t *option, dialog_event_t event)
@@ -188,7 +188,7 @@ static dialog_return_t rtc_dst_cb(dialog_option_t *option, dialog_event_t event)
         rg_settings_set_int32(SETTING_RTC_DST, gui.rtc_dst);
     }
     strcpy(option->value, gui.rtc_dst ? "On" : "Off");
-    return RG_DIALOG_IGNORE;
+    return RG_DIALOG_ENTER;
 }
 
 static dialog_return_t rtc_t_set_cb(dialog_option_t *option, dialog_event_t event)

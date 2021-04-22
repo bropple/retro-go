@@ -325,7 +325,7 @@ int sram_load(const char *file)
 		if (fread(ram.sbank, 8192, mbc.ramsize, f))
 		{
 			ram.sram_dirty = 0;
-			rtc_load(f);
+			//rtc_load(f);
 			ret = 0;
 		}
 		fclose(f);
@@ -334,43 +334,7 @@ int sram_load(const char *file)
 	return ret;
 }
 
-bool DS3231saveTimeStamp(i2c_dev_t dev, const char* file, bool isSRAM){ //save the current time to the JSON file
-    if(dev.enabled == true && dev.errored == false) //if RTC is present/enabled, we save the current RTC time to the JSON file with the rom name.
-        {
-            struct tm RTCtime = rg_rtc_getTime(dev); //get current RTC time
-            
-            char * time_buff = malloc(sizeof(char*)*23);
-            
-            //also check DST flag in the SRAM/SAV
-            
-            sprintf(time_buff, "%02d/%02d/%04d %03d %02d:%02d:%02d", RTCtime.tm_mon + 1, RTCtime.tm_mday, RTCtime.tm_year, dayOfYear(RTCtime.tm_year, RTCtime.tm_mon + 1, RTCtime.tm_mday), RTCtime.tm_hour, RTCtime.tm_min, RTCtime.tm_sec);
-            
-            char* dynamicKey = malloc(sizeof(char*)*sizeof(file) + sizeof(char*)*23 + sizeof(char*)*16 + 13); //if it's a pokemon game save the file path, rom name, and RTC time
-            strcpy(dynamicKey, RTC_GB_HW_TIME);
-            
-            if(strcmp(rom.name, "PM_CRYSTAL") || strcmp(rom.name, "POKEMON_SLVAAXE▒") || strcmp(rom.name, "POKEMON_GLDAAUE▒")){
-                 strcat(dynamicKey, ": ");
-                 strcat(dynamicKey, rom.name);
-            }
-            
-            rg_settings_set_string(dynamicKey, time_buff); //if dynamicKey isn't altered based on ROM name it will just be RTC_GB_HW_TIME
-            strcat(dynamicKey, ", Path: ");
-            rg_settings_set_string(dynamicKey, file); //it will also save the rom's PATH so it isn't mistaken for a different copy of the game
-            //rg_settings_save();
-            RG_LOGI("DS3231M: Timestamp saved to JSON.\n");
-            RG_LOGI("Timestamp: %s\n", dynamicKey);
-            free(time_buff);
-            free(dynamicKey);
-            return true;
-        }
-    else {
-        RG_LOGE("DS3231M: Timestamp not saved to JSON.\n");
-        return false;
-    }
-}
-
-
-int sram_save(const char *file, i2c_dev_t dev)
+int sram_save(const char *file)
 {
 	int ret = -1;
 	FILE *f;
@@ -388,14 +352,13 @@ int sram_save(const char *file, i2c_dev_t dev)
 			ret = 0;
 		}
 		fclose(f);
-        DS3231saveTimeStamp(dev, file);
 	}
 
 	return ret;
 }
 
 
-int sram_update(const char *file, i2c_dev_t dev)
+int sram_update(const char *file)
 {
 	if (!mbc.batt || !mbc.ramsize || !file || !*file)
 		return -1;
@@ -434,7 +397,6 @@ int sram_update(const char *file, i2c_dev_t dev)
 	if (fseek(fp, mbc.ramsize * 8192, SEEK_SET) == 0)
 	{
 		rtc_save(fp);
-        DS3231saveTimeStamp(dev, file);
 	}
 
 _cleanup:
@@ -471,7 +433,7 @@ _cleanup:
  *
  */
 
-int state_save(const char *file, i2c_dev_t dev)
+int state_save(const char *file)
 {
 	byte *buf = calloc(1, 4096);
 	if (!buf) return -2;

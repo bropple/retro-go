@@ -11,6 +11,8 @@ rtc_t rtc;
 // Set in the far future for VBA-M support
 #define RT_BASE 1893456000
 
+static const char *SETTING_RTC_DST      = "RTCdst";
+
 
 void rtc_reset(bool hard, i2c_dev_t dev)
 {
@@ -48,6 +50,53 @@ void rtc_latch(byte b)
 		rtc.regs[7] = 0xff;
 	}
 	rtc.latch = b;
+}
+
+bool DS3231_pokeTimeUpdate(i2c_dev_t dev){
+    
+    /*  The purpose of this function is to overwrite the time value of 
+     *  Pokemon Crystal, Pokemon Silver, or Pokemon Gold with the DS3231's
+     *  own time value in order to synchronize time like the actual cartridge.
+     * 
+     *  This should also work with ROM hacks of the game, as long as the ROM name
+     *  in the header is the same.
+     */
+    
+    //Default time value: SUNDAY 12:00:00 AM -> Day 0 00:00:00;
+    
+    //we will first set the start time in the game to zero so the default time value is in effect, and is known.
+    
+    if(strcmp(rom.name, "PM_CRYSTAL") == 0) { //if the game is Pokemon Crystal or related ROM hack
+        mem_write(0xD4B6, 0x00); //wStartDay
+        mem_write(0xD4B7, 0x00); //wStartHour
+        mem_write(0xD4B8, 0x00); //wStartMinute
+        mem_write(0xD4B9, 0x00); //wStartSecond
+    }
+    else if(strcmp(rom.name, "POKEMON_SLVAAXE▒") == 0 || strcmp(rom.name, "POKEMON_GLDAAUE▒") == 0){
+        //the addresses for the same variables are different in gold/silver.
+        mem_write(0xD1DC, 0x00); //wStartDay
+        mem_write(0xD1DD, 0x00); //wStartHour
+        mem_write(0xD1DE, 0x00); //wStartMinute
+        mem_write(0xD1DF, 0x00); //wStartSecond
+    }
+    
+    else return false; //the game is not a recognized pokemon game.
+    
+    struct tm RTCtime = rg_rtc_getTime(dev);
+    //rg_rtc_debug(RTCtime);
+    
+    if (rg_settings_get_int32(SETTING_RTC_DST, 0) == 1) //if DST mode is toggled add an hour
+    {
+        if(RTCtime.tm_hour == 23) RTCtime.tm_hour = 0;
+        else RTCtime.tm_hour++;
+    }
+    //With the start time set to zero, direct time setting works as expected.
+    rtc.d = RTCtime.tm_wday + 1;
+    rtc.h = RTCtime.tm_hour;
+    rtc.m = RTCtime.tm_min;
+    rtc.s = RTCtime.tm_sec;
+    
+    return true;
 }
 
 void rtc_write(byte b)
