@@ -64,7 +64,7 @@ static bool load_state_handler(const char *filename)
     skipFrames = 0;
     autoSaveSRAM_Timer = 0;
 
-    if((strcmp(rom.name, "PM_CRYSTAL") == 0 || strcmp(rom.name, "POKEMON_SLVAAXE▒") == 0 || strcmp(rom.name, "POKEMON_GLDAAUE▒") == 0) && (rg_settings_get_int32(SETTING_RTC_ENABLE, 0) == 1)){
+    if((strncmp(rom.name, "PM_CRYSTAL", 10) == 0 || strncmp(rom.name, "POKEMON_SLVAAXE", 15) == 0 || strncmp(rom.name, "POKEMON_GLDAAUE", 15) == 0) && (rg_settings_get_int32(SETTING_RTC_ENABLE, 0) == 1)){
         RG_LOGI("Pokemon game detected! Syncing DS3231M...\n");
         DS3231_pokeTimeUpdate(app->dev);
     }
@@ -79,7 +79,7 @@ static bool reset_handler(bool hard)
     skipFrames = 20;
     autoSaveSRAM_Timer = 0;
     
-    if((strcmp(rom.name, "PM_CRYSTAL") == 0 || strcmp(rom.name, "POKEMON_SLVAAXE▒") == 0 || strcmp(rom.name, "POKEMON_GLDAAUE▒") == 0) && (rg_settings_get_int32(SETTING_RTC_ENABLE, 0) == 1)){
+    if((strncmp(rom.name, "PM_CRYSTAL", 10) == 0 || strncmp(rom.name, "POKEMON_SLVAAXE", 15) == 0 || strncmp(rom.name, "POKEMON_GLDAAUE", 15) == 0) && (rg_settings_get_int32(SETTING_RTC_ENABLE, 0) == 1)){
         RG_LOGI("Pokemon game detected! Syncing DS3231M...\n");
         DS3231_pokeTimeUpdate(app->dev);
     }
@@ -192,7 +192,7 @@ static dialog_return_t rtc_update_cb(dialog_option_t *option, dialog_event_t eve
 
 static dialog_return_t rtc_syncNow_cb(dialog_option_t *option, dialog_event_t event)
 {
-    if((strcmp(rom.name, "PM_CRYSTAL") == 0 || strcmp(rom.name, "POKEMON_SLVAAXE▒") == 0 || strcmp(rom.name, "POKEMON_GLDAAUE▒") == 0) && (rg_settings_get_int32(SETTING_RTC_ENABLE, 0) == 1)){
+    if((strncmp(rom.name, "PM_CRYSTAL", 10) == 0 || strncmp(rom.name, "POKEMON_SLVAAXE", 15) == 0 || strncmp(rom.name, "POKEMON_GLDAAUE", 15) == 0) && (rg_settings_get_int32(SETTING_RTC_ENABLE, 0) == 1)){
         RG_LOGI("Pokemon game detected! Force syncing RTC...\n");
         DS3231_pokeTimeUpdate(app->dev);
     }
@@ -300,7 +300,7 @@ void app_main(void)
         sram_load(sramFile);
     }
     
-    if((strcmp(rom.name, "PM_CRYSTAL") == 0 || strcmp(rom.name, "POKEMON_SLVAAXE▒") == 0 || strcmp(rom.name, "POKEMON_GLDAAUE▒") == 0) && (rg_settings_get_int32(SETTING_RTC_ENABLE, 0) == 1)){
+    if((strncmp(rom.name, "PM_CRYSTAL", 10) == 0 || strncmp(rom.name, "POKEMON_SLVAAXE", 15) == 0 || strncmp(rom.name, "POKEMON_GLDAAUE", 15) == 0) && (rg_settings_get_int32(SETTING_RTC_ENABLE, 0) == 1)){
         RG_LOGI("Pokemon game detected! Syncing DS3231M...\n");
         DS3231_pokeTimeUpdate(app->dev);
     }

@@ -320,6 +320,7 @@ static dialog_return_t rtc_master_enable_cb(dialog_option_t *option, dialog_even
 
 void retro_loop(i2c_dev_t dev)
 {
+    //the gui variables need to be initialized before the tabs -> somehow causes both theme and tab to be lost on reboot
 
     gui.selected     = rg_settings_get_app_int32(SETTING_SELECTED_TAB, 0);
     gui.theme        = rg_settings_get_app_int32(SETTING_GUI_THEME, 0);

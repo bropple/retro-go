@@ -192,7 +192,7 @@ int rom_load(const char *file)
 
 	memcpy(&rom.checksum, header + 0x014E, 2);
 	memcpy(&rom.name, header + 0x0134, 16);
-	rom.name[16] = 0;
+	rom.name[16] = '\0';
 
 	mbc.batt = (type == 3 || type == 6 || type == 9 || type == 13 || type == 15 ||
 				type == 16 || type == 19 || type == 27 || type == 30 || type == 255);

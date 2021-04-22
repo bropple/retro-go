@@ -66,13 +66,13 @@ bool DS3231_pokeTimeUpdate(i2c_dev_t dev){
     
     //we will first set the start time in the game to zero so the default time value is in effect, and is known.
     
-    if(strcmp(rom.name, "PM_CRYSTAL") == 0) { //if the game is Pokemon Crystal or related ROM hack
+    if(strncmp(rom.name, "PM_CRYSTAL", 10) == 0) { //if the game is Pokemon Crystal or related ROM hack
         mem_write(0xD4B6, 0x00); //wStartDay
         mem_write(0xD4B7, 0x00); //wStartHour
         mem_write(0xD4B8, 0x00); //wStartMinute
         mem_write(0xD4B9, 0x00); //wStartSecond
     }
-    else if(strcmp(rom.name, "POKEMON_SLVAAXE▒") == 0 || strcmp(rom.name, "POKEMON_GLDAAUE▒") == 0){
+    else if(strncmp(rom.name, "POKEMON_SLVAAXE", 15) == 0 || strncmp(rom.name, "POKEMON_GLDAAUE", 15) == 0){
         //the addresses for the same variables are different in gold/silver.
         mem_write(0xD1DC, 0x00); //wStartDay
         mem_write(0xD1DD, 0x00); //wStartHour
