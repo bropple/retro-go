@@ -134,6 +134,9 @@ static inline bool tab_enabled(tab_t *tab)
     return (disabled_tabs == gui.tabcount) || (tab->initialized && !tab->is_empty);
 }
 
+//The following RTC settings should remain global, use rg_settings_xxx_int32 instead of the app version.
+//May want to make time show up in the menus inside every emulator eventually.
+
 static dialog_return_t rtc_enable_cb(dialog_option_t *option, dialog_event_t event)
 {
     if (event == RG_DIALOG_PREV || event == RG_DIALOG_NEXT) {
@@ -183,6 +186,7 @@ static dialog_return_t rtc_hour_pref_cb(dialog_option_t *option, dialog_event_t 
 
 static dialog_return_t rtc_dst_cb(dialog_option_t *option, dialog_event_t event)
 {
+    gui.rtc_dst = rg_settings_get_int32(SETTING_RTC_DST, 0);
     if (event == RG_DIALOG_PREV || event == RG_DIALOG_NEXT) {
         gui.rtc_dst = gui.rtc_dst ? 0 : 1;
         rg_settings_set_int32(SETTING_RTC_DST, gui.rtc_dst);
@@ -191,9 +195,11 @@ static dialog_return_t rtc_dst_cb(dialog_option_t *option, dialog_event_t event)
     return RG_DIALOG_ENTER;
 }
 
+//TODO: Make HW RTC time update settings work for 12 hour mode as well.
+
 static dialog_return_t rtc_t_set_cb(dialog_option_t *option, dialog_event_t event)
 {
-    bool dst_toggled = false; //dst variable for these settings only
+    bool dst = false;
     if(option->id == 'Y') {
         //2000 min, 2090 max
         if (event == RG_DIALOG_PREV && --RTCtimeBuf.tm_year < 2000) RTCtimeBuf.tm_year = 2100;
@@ -236,28 +242,29 @@ static dialog_return_t rtc_t_set_cb(dialog_option_t *option, dialog_event_t even
     }
     if (option->id == 'T') {
         if (event == RG_DIALOG_PREV || event == RG_DIALOG_NEXT) {
-            dst_toggled = dst_toggled ? 0 : 1;
-            rg_settings_set_int32(SETTING_RTC_DST, gui.rtc_dst);
+            dst = dst ? 0 : 1; //this merely keeps track of the new time being DST or not
         }
-        strcpy(option->value, dst_toggled ? "On" : "Off");
+        strcpy(option->value, dst ? "On" : "Off");
     }
     if (option->id == 'C') {
         if(event == RG_DIALOG_ENTER)
         {
             //use RTCtimeBuf struct to update RTC time
-            if(app->dev.enabled == true)
+            if(app->dev.enabled)
             {
-                if(dst_toggled == true)
+                if(dst)
                 {
                     //if its DST we need to subtract an hour now because the software
                     //normally takes care of this elsewhere.
                     if(RTCtimeBuf.tm_hour == 0) RTCtimeBuf.tm_hour = 23;
                     else RTCtimeBuf.tm_hour--;
                 }
-                rg_settings_set_int32(SETTING_RTC_DST, dst_toggled);
+                rg_settings_set_int32(SETTING_RTC_DST, dst);
+                gui.rtc_dst = dst;
                 ds3231_set_time(&(app->dev), &RTCtimeBuf);
+                return RG_DIALOG_SELECT;
             }
-            else rg_gui_alert("DS3231M",  "Unable to update RTC time!");
+            else rg_gui_alert("DS3231M",  "Unable to update HW RTC time!");
         }
     }
 

@@ -35,7 +35,11 @@ static bool netplay = false;
 
 static const char *SETTING_SAVESRAM = "SaveSRAM";
 static const char *SETTING_PALETTE  = "Palette";
-static const char *SETTING_RTC_ENABLE = "RTCenable";
+static const char *SETTING_RTC_ENABLE = "RTCenable"; //System enable of DS3231M hardware RTC
+//static const char *SETTING_RTC_DST       = "RTCdst";
+static const char *SETTING_RTC_GB_ENABLE    = "RTCgbEnable"; //Gameboy specific enable of hardware RTC, handy if you want to change time in-game briefly.
+
+bool RTCgbEnable = false;
 // --- MAIN
 
 
@@ -49,13 +53,12 @@ static bool save_state_handler(const char *filename)
     return state_save(filename) == 0;
 }
 
-static void RTCtimeSync(i2c_dev_t dev)
+static void DS3231timeSync(i2c_dev_t dev)
 {
     //this function checks to see if the ROM is a Pokemon game or hack and syncs it.
-        if((strncmp(rom.name, "PM_CRYSTAL", 10) == 0 || strncmp(rom.name, "POKEMON_SLVAAXE", 15) == 0 || strncmp(rom.name, "POKEMON_GLDAAUE", 15) == 0 || strncmp(rom.name, "PM_PRISM", 8) == 0) && (rg_settings_get_int32(SETTING_RTC_ENABLE, 0) == 1))
+        if(DS3231_gameTimeUpdate(app->dev) == true)
     {
-        RG_LOGI("Pokemon game detected! Syncing DS3231M...\n");
-        DS3231_pokeTimeUpdate(app->dev);
+        RG_LOGI("RTC game detected! Gnuboy RTC synced from DS3231M.");
     }
 }
 
@@ -73,7 +76,7 @@ static bool load_state_handler(const char *filename)
 
     skipFrames = 0;
     autoSaveSRAM_Timer = 0;
-    RTCtimeSync(app->dev);
+    DS3231timeSync(app->dev);
     return true;
 }
 
@@ -85,7 +88,7 @@ static bool reset_handler(bool hard)
     skipFrames = 20;
     autoSaveSRAM_Timer = 0;
     
-    RTCtimeSync(app->dev);
+    DS3231timeSync(app->dev);
 
     return true;
 }
@@ -193,18 +196,33 @@ static dialog_return_t rtc_update_cb(dialog_option_t *option, dialog_event_t eve
     return RG_DIALOG_IGNORE;
 }
 
-static dialog_return_t rtc_syncNow_cb(dialog_option_t *option, dialog_event_t event)
+static dialog_return_t rtc_HWsyncNow_cb(dialog_option_t *option, dialog_event_t event)
 {
-    RTCtimeSync(app->dev);
-    return RG_DIALOG_ENTER;
+    if(event == RG_DIALOG_ENTER)
+    {
+        DS3231timeSync(app->dev);
+        return RG_DIALOG_SELECT;
+    }
+    return RG_DIALOG_IGNORE;
+}
+
+static dialog_return_t rtc_gb_enable_cb(dialog_option_t *option, dialog_event_t event) //toggles the use of the RTC in actual emulation
+{
+    if (event == RG_DIALOG_PREV || event == RG_DIALOG_NEXT) {
+        RTCgbEnable = !RTCgbEnable;
+        rg_settings_set_app_int32(SETTING_RTC_GB_ENABLE, RTCgbEnable);
+    }
+    strcpy(option->value, RTCgbEnable ? "Yes" : "No");
+    return RG_DIALOG_IGNORE;
 }
 
 static dialog_return_t advanced_settings_cb(dialog_option_t *option, dialog_event_t event)
 {
     if (event == RG_DIALOG_ENTER) {
         dialog_option_t options[] = {
-            {101, "Set clock", "00:00", !(rg_settings_get_int32(SETTING_RTC_ENABLE, 0)), &rtc_update_cb},
-            {102, "Sync RTC Now", NULL, (rg_settings_get_int32(SETTING_RTC_ENABLE, 0)), &rtc_syncNow_cb},
+            {101, "Use HW RTC", "No", rg_settings_get_int32(SETTING_RTC_ENABLE, 0), &rtc_gb_enable_cb},
+            {102, "Sync HW RTC Now", NULL, (rg_settings_get_int32(SETTING_RTC_ENABLE, 0) && rg_settings_get_app_int32(SETTING_RTC_GB_ENABLE, 0)), &rtc_HWsyncNow_cb},
+            {103, "Set clock", "--:--", (!(rg_settings_get_app_int32(SETTING_RTC_GB_ENABLE, 0))), &rtc_update_cb}, //cannot change when RTC is in sync mode
             RG_DIALOG_SEPARATOR,
             {111, "Auto save SRAM", "Off", mbc.batt && mbc.ramsize, &sram_autosave_cb},
             {112, "Save SRAM now ", NULL, mbc.batt && mbc.ramsize, &sram_save_now_cb},
@@ -252,6 +270,8 @@ void app_main(void)
     };
 
     app = rg_system_init(AUDIO_SAMPLE_RATE, &handlers);
+    
+    RTCgbEnable = rg_settings_get_app_int32(SETTING_RTC_ENABLE, 0); //boolean value governs in-game usage of HW RTC
 
     frames[0].flags = RG_PIXEL_565|RG_PIXEL_BE;
     frames[0].width = GB_WIDTH;
@@ -300,7 +320,7 @@ void app_main(void)
         sram_load(sramFile);
     }
     
-    RTCtimeSync(app->dev);
+    DS3231timeSync(app->dev);
 
     while (true)
     {

@@ -11,7 +11,9 @@ rtc_t rtc;
 // Set in the far future for VBA-M support
 #define RT_BASE 1893456000
 
+static const char *SETTING_RTC_ENABLE = "RTCenable";
 static const char *SETTING_RTC_DST      = "RTCdst";
+static const char *SETTING_RTC_GB_ENABLE    = "RTCgbEnable";
 
 
 void rtc_reset(bool hard, i2c_dev_t dev)
@@ -23,7 +25,7 @@ void rtc_reset(bool hard, i2c_dev_t dev)
 	}
 }
 
-void rtc_sync(i2c_dev_t dev)
+void rtc_sync()
 {
 	time_t timer = time(NULL);
 	struct tm *info = localtime(&timer);
@@ -50,65 +52,6 @@ void rtc_latch(byte b)
 		rtc.regs[7] = 0xff;
 	}
 	rtc.latch = b;
-}
-
-bool DS3231_pokeTimeUpdate(i2c_dev_t dev){
-    
-    /*  The purpose of this function is to overwrite the time value of 
-     *  Pokemon Crystal, Pokemon Silver Pokemon Gold, and Pokemon Prism with the DS3231's
-     *  own time value in order to synchronize time more like a real cartridge.
-     * 
-     *  This should also work with ROM hacks of the game, as long as the ROM name
-     *  in the header is the same.
-     */
-    
-    // G/S/C default time value: SUNDAY 12:00:00 AM -> Day 0 00:00:00;
-    // Prism default time value: SUNDAY JAN 1 2000(?) 12:00:00 AM
-    
-    //we will first set the start time in the game to zero so the default time value is in effect, and is known.
-    
-    if(strncmp(rom.name, "PM_CRYSTAL", 10) == 0)
-    { //if the game is Pokemon Crystal or closely related ROM hack
-        mem_write(0xD4B6, 0x00); //wStartDay
-        mem_write(0xD4B7, 0x00); //wStartHour
-        mem_write(0xD4B8, 0x00); //wStartMinute
-        mem_write(0xD4B9, 0x00); //wStartSecond
-    }
-    else if(strncmp(rom.name, "POKEMON_SLVAAXE", 15) == 0 || strncmp(rom.name, "POKEMON_GLDAAUE", 15) == 0)
-    { //the addresses for the same variables are different in gold/silver.
-        mem_write(0xD1DC, 0x00); //wStartDay
-        mem_write(0xD1DD, 0x00); //wStartHour
-        mem_write(0xD1DE, 0x00); //wStartMinute
-        mem_write(0xD1DF, 0x00); //wStartSecond
-    }
-    else if(strncmp(rom.name, "PM_PRISM", 8) == 0)
-    {   //Prism is very different.
-        mem_write(0xDFE8, 0x00); //wRTCbaseDay
-        mem_write(0xDFE9, 0x00); //wRTCbaseHours
-        mem_write(0xDFEA, 0x00); //wRTCbaseMinutes
-        mem_write(0xDFEB, 0x00); //wRTCbaseSeconds
-        mem_write(0xDFEC, 0x00); //wRTCbaseYear
-        mem_write(0xDFED, 0x00); //wRTCbaseMonth
-    }
-    
-    else return false; //the game is not a recognized pokemon game.
-    
-    struct tm RTCtime = rg_rtc_getTime(dev);
-    //rg_rtc_debug(RTCtime);
-    
-    if (rg_settings_get_int32(SETTING_RTC_DST, 0) == 1) //if DST mode is toggled add an hour
-    {
-        if(RTCtime.tm_hour == 23) RTCtime.tm_hour = 0;
-        else RTCtime.tm_hour++;
-    }
-    //With the start time set to zero, direct time setting works as expected.
-    //prism is more complicated than this...
-    rtc.d = RTCtime.tm_wday + 1;
-    rtc.h = RTCtime.tm_hour;
-    rtc.m = RTCtime.tm_min;
-    rtc.s = RTCtime.tm_sec;
-    
-    return true;
 }
 
 void rtc_write(byte b)
@@ -204,4 +147,72 @@ void rtc_load(FILE *f)
 		fread(&rtc.regs[i], 4, 1, f);
 	}
 	fread(&rt, 8, 1, f);
+}
+
+bool DS3231_gameTimeUpdate(i2c_dev_t dev)
+{    
+    /*  The purpose of this function is to overwrite the time value of 
+     *  Pokemon Crystal, Pokemon Silver Pokemon Gold, and Pokemon Prism (and maybe other games) with
+     *  the DS3231's own time value in order to synchronize time more like a real cartridge.
+     * 
+     *  This should also work with ROM hacks of a game, as long as the ROM name
+     *  in the header is the same.
+     * 
+     *  Return values:
+     *         true: If the game is recognized and the time has successfully been synced.
+     *         false: If the game is NOT recognized or there was a hardware problem with time retrieval.
+     */
+    
+    // G/S/C default time value: SUNDAY 12:00:00 AM -> Day 0 00:00:00;
+    // Prism default time value: SUNDAY JAN 1 2000(?) 12:00:00 AM
+    
+    //we will first set the start time in the game to zero so the default time value is in effect, and is known.
+    
+    if((rg_settings_get_int32(SETTING_RTC_ENABLE, 0) == 1) && (rg_settings_get_app_int32(SETTING_RTC_GB_ENABLE, 0) == 1))
+    {
+        if(strncmp(rom.name, "PM_CRYSTAL", 10) == 0)
+        { //if the game is Pokemon Crystal or closely related ROM hack
+            mem_write(0xD4B6, 0x00); //wStartDay
+            mem_write(0xD4B7, 0x00); //wStartHour
+            mem_write(0xD4B8, 0x00); //wStartMinute
+            mem_write(0xD4B9, 0x00); //wStartSecond
+        }
+        else if(strncmp(rom.name, "POKEMON_SLVAAXE", 15) == 0 || strncmp(rom.name, "POKEMON_GLDAAUE", 15) == 0)
+        { //the addresses for the same variables are different in gold/silver.
+            mem_write(0xD1DC, 0x00); //wStartDay
+            mem_write(0xD1DD, 0x00); //wStartHour
+            mem_write(0xD1DE, 0x00); //wStartMinute
+            mem_write(0xD1DF, 0x00); //wStartSecond
+        }
+        else if(strncmp(rom.name, "PM_PRISM", 8) == 0)
+        {   //Prism is very different.
+            mem_write(0xDFE8, 0x00); //wRTCbaseDay
+            mem_write(0xDFE9, 0x00); //wRTCbaseHours
+            mem_write(0xDFEA, 0x00); //wRTCbaseMinutes
+            mem_write(0xDFEB, 0x00); //wRTCbaseSeconds
+            mem_write(0xDFEC, 0x00); //wRTCbaseYear
+            mem_write(0xDFED, 0x00); //wRTCbaseMonth
+        }
+        
+        else return false; //the game is not a recognized RTC game.
+        
+        struct tm RTCtime = rg_rtc_getTime(dev);
+        if(dev.errored == true) return false; //There was a problem reading from the DS3231M.
+        //rg_rtc_debug(RTCtime);
+        
+        if (rg_settings_get_int32(SETTING_RTC_DST, 0) == 1) //if DST mode is toggled add an hour
+        {
+            if(RTCtime.tm_hour == 23) RTCtime.tm_hour = 0;
+            else RTCtime.tm_hour++;
+        }
+        //With the start time set to zero, direct time setting works as expected.
+        //prism is more complicated than this...
+        rtc.d = RTCtime.tm_wday + 1;
+        rtc.h = RTCtime.tm_hour;
+        rtc.m = RTCtime.tm_min;
+        rtc.s = RTCtime.tm_sec;
+        
+        return true;
+    }
+    else return false; //settings not enabled.
 }
