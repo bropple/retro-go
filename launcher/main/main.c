@@ -22,6 +22,7 @@ static const char *SETTING_RTC_HOUR_PREF = "RTChourPref";
 static const char *SETTING_RTC_DST       = "RTCdst";
 
 struct tm RTCtimeBuf = { 0 }; //time buffer for use in RTC settings
+bool dst = false;
 static rg_app_desc_t *app; //contains RTC device descriptor
 
 
@@ -199,7 +200,6 @@ static dialog_return_t rtc_dst_cb(dialog_option_t *option, dialog_event_t event)
 
 static dialog_return_t rtc_t_set_cb(dialog_option_t *option, dialog_event_t event)
 {
-    bool dst = false;
     if(option->id == 'Y') {
         //2000 min, 2090 max
         if (event == RG_DIALOG_PREV && --RTCtimeBuf.tm_year < 2000) RTCtimeBuf.tm_year = 2100;
@@ -242,7 +242,7 @@ static dialog_return_t rtc_t_set_cb(dialog_option_t *option, dialog_event_t even
     }
     if (option->id == 'T') {
         if (event == RG_DIALOG_PREV || event == RG_DIALOG_NEXT) {
-            dst = dst ? 0 : 1; //this merely keeps track of the new time being DST or not
+            dst = dst ? 0 : 1;
         }
         strcpy(option->value, dst ? "On" : "Off");
     }
@@ -327,20 +327,20 @@ static dialog_return_t rtc_master_enable_cb(dialog_option_t *option, dialog_even
 
 void retro_loop(i2c_dev_t dev)
 {
-    //the gui variables need to be initialized before the tabs -> somehow causes both theme and tab to be lost on reboot
+    //the gui variables need to be initialized before the tabs -> somehow causes both theme and tab settings not to load on reboot
 
-    gui.selected     = rg_settings_get_app_int32(SETTING_SELECTED_TAB, 0);
-    gui.theme        = rg_settings_get_app_int32(SETTING_GUI_THEME, 0);
-    gui.show_empty   = rg_settings_get_app_int32(SETTING_SHOW_EMPTY, 1);
-    gui.show_preview = rg_settings_get_app_int32(SETTING_SHOW_PREVIEW, 1);
-    gui.show_preview_fast = rg_settings_get_app_int32(SETTING_PREVIEW_SPEED, 0);
+    gui.selected            = rg_settings_get_app_int32(SETTING_SELECTED_TAB, 0);
+    gui.theme               = rg_settings_get_app_int32(SETTING_GUI_THEME, 0);
+    gui.show_empty          = rg_settings_get_app_int32(SETTING_SHOW_EMPTY, 1);
+    gui.show_preview        = rg_settings_get_app_int32(SETTING_SHOW_PREVIEW, 1);
+    gui.show_preview_fast   = rg_settings_get_app_int32(SETTING_PREVIEW_SPEED, 0);
 
     //RTC variables
-    gui.rtc_enable =        rg_settings_get_int32(SETTING_RTC_ENABLE, 0);
-    gui.rtc_format =        rg_settings_get_int32(SETTING_RTC_FORMAT, 0);
-    gui.rtc_month_text =    rg_settings_get_int32(SETTING_RTC_MONTH_TXT, 0);
-    gui.rtc_hour_pref =     rg_settings_get_int32(SETTING_RTC_HOUR_PREF, 0);
-    gui.rtc_dst =           rg_settings_get_int32(SETTING_RTC_DST, 0);
+    gui.rtc_enable      = rg_settings_get_int32(SETTING_RTC_ENABLE, 0);
+    gui.rtc_format      = rg_settings_get_int32(SETTING_RTC_FORMAT, 0);
+    gui.rtc_month_text  = rg_settings_get_int32(SETTING_RTC_MONTH_TXT, 0);
+    gui.rtc_hour_pref   = rg_settings_get_int32(SETTING_RTC_HOUR_PREF, 0);
+    gui.rtc_dst         = rg_settings_get_int32(SETTING_RTC_DST, 0);
     
     tab_t *tab = gui_get_current_tab();
     int last_key = -1;
