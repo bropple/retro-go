@@ -110,7 +110,7 @@ enum
 
 typedef struct
 {
-   int PS;		// Processor status register   8 bits
+   int PSR;		// Processor status register   8 bits
    int A;		// Accumulator                 8 bits
    int X;		// X index register            8 bits
    int Y;		// Y index register            8 bits
@@ -191,14 +191,14 @@ class C65C02
       inline bool ContextSave(LSS_FILE *fp)
       {
          TRACE_CPU0("ContextSave()");
-         int mPS;
-         mPS=PS();
+         int mPSR;
+         mPSR=PSR();
          if(!lss_printf(fp,"C6502::ContextSave")) return 0;
          if(!lss_write(&mA,sizeof(ULONG),1,fp)) return 0;
          if(!lss_write(&mX,sizeof(ULONG),1,fp)) return 0;
          if(!lss_write(&mY,sizeof(ULONG),1,fp)) return 0;
          if(!lss_write(&mSP,sizeof(ULONG),1,fp)) return 0;
-         if(!lss_write(&mPS,sizeof(ULONG),1,fp)) return 0;
+         if(!lss_write(&mPSR,sizeof(ULONG),1,fp)) return 0;
          if(!lss_write(&mPC,sizeof(ULONG),1,fp)) return 0;
          if(!lss_write(&mIRQActive,sizeof(ULONG),1,fp)) return 0;
          return 1;
@@ -207,7 +207,7 @@ class C65C02
       inline bool ContextLoad(LSS_FILE *fp)
       {
          TRACE_CPU0("ContextLoad()");
-         int mPS;
+         int mPSR;
          char teststr[32]="XXXXXXXXXXXXXXXXXX";
          if(!lss_read(teststr,sizeof(char),18,fp)) return 0;
          if(strcmp(teststr,"C6502::ContextSave")!=0) return 0;
@@ -215,10 +215,10 @@ class C65C02
          if(!lss_read(&mX,sizeof(ULONG),1,fp)) return 0;
          if(!lss_read(&mY,sizeof(ULONG),1,fp)) return 0;
          if(!lss_read(&mSP,sizeof(ULONG),1,fp)) return 0;
-         if(!lss_read(&mPS,sizeof(ULONG),1,fp)) return 0;
+         if(!lss_read(&mPSR,sizeof(ULONG),1,fp)) return 0;
          if(!lss_read(&mPC,sizeof(ULONG),1,fp)) return 0;
          if(!lss_read(&mIRQActive,sizeof(ULONG),1,fp)) return 0;
-         PS(mPS);
+         PSR(mPSR);
          return 1;
       }
 
@@ -237,7 +237,7 @@ class C65C02
          //				// Push processor status
          //				CPU_POKE(0x0100+mSP--,mPC>>8);
          //				CPU_POKE(0x0100+mSP--,mPC&0x00ff);
-         //				CPU_POKE(0x0100+mSP--,PS());
+         //				CPU_POKE(0x0100+mSP--,PSR());
          //
          //				// Pick up the new PC
          //				mPC=CPU_PEEKW(NMI_VECTOR);
@@ -254,7 +254,7 @@ class C65C02
             // Push processor status
             PUSH(mPC>>8);
             PUSH(mPC&0xff);
-            PUSH(PS()&0xef);		// Clear B flag on stack
+            PUSH(PSR()&0xef);		// Clear B flag on stack
 
             mI=TRUE;				// Stop further interrupts
             mD=FALSE;				// Clear decimal mode
@@ -1718,7 +1718,7 @@ class C65C02
 
       inline void SetRegs(C6502_REGS &regs)
       {
-         PS(regs.PS);
+         PSR(regs.PSR);
          mA=regs.A;
          mX=regs.X;
          mY=regs.Y;
@@ -1736,7 +1736,7 @@ class C65C02
 
       inline void GetRegs(C6502_REGS &regs)
       {
-         regs.PS=PS();
+         regs.PSR=PSR();
          regs.A=mA;
          regs.X=mX;
          regs.Y=mY;
@@ -1801,30 +1801,30 @@ class C65C02
    private:
 
       // Answers value of the Processor Status register
-      int PS() const
+      int PSR() const
       {
-         UBYTE ps = 0x20;
-         if(mN) ps|=0x80;
-         if(mV) ps|=0x40;
-         if(mB) ps|=0x10;
-         if(mD) ps|=0x08;
-         if(mI) ps|=0x04;
-         if(mZ) ps|=0x02;
-         if(mC) ps|=0x01;
-         return ps;
+         UBYTE PSR = 0x20;
+         if(mN) PSR|=0x80;
+         if(mV) PSR|=0x40;
+         if(mB) PSR|=0x10;
+         if(mD) PSR|=0x08;
+         if(mI) PSR|=0x04;
+         if(mZ) PSR|=0x02;
+         if(mC) PSR|=0x01;
+         return PSR;
       }
 
 
       // Change the processor flags to correspond to the given value
-      void PS(int ps)
+      void PSR(int PSR)
       {
-         mN=ps&0x80;
-         mV=ps&0x40;
-         mB=ps&0x10;
-         mD=ps&0x08;
-         mI=ps&0x04;
-         mZ=ps&0x02;
-         mC=ps&0x01;
+         mN=PSR&0x80;
+         mV=PSR&0x40;
+         mB=PSR&0x10;
+         mD=PSR&0x08;
+         mI=PSR&0x04;
+         mZ=PSR&0x02;
+         mC=PSR&0x01;
       }
 
 };

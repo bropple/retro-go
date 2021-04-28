@@ -2,6 +2,7 @@
 
 #include <rg_input.h>
 #include <stdbool.h>
+#include <time.h>
 #include "emulators.h"
 
 typedef enum {
@@ -91,6 +92,11 @@ typedef struct {
     int idle_counter;
     int last_key;
     gamepad_state_t joystick;
+    bool rtc_enable;
+    int rtc_format;
+    bool rtc_month_text;
+    bool rtc_hour_pref;
+    bool rtc_dst;
 } retro_gui_t;
 
 extern retro_gui_t gui;

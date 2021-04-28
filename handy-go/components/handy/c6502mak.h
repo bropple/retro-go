@@ -292,7 +292,7 @@
 //	mPC++;\
 //    PUSH(mPC>>8);\
 //	PUSH(mPC&0xff);\
-//	PUSH(PS()|0x10);\
+//	PUSH(PSR()|0x10);\
 //\
 //	mD=FALSE;\
 //	mI=TRUE;\
@@ -304,7 +304,7 @@
 	mPC++;\
     PUSH(mPC>>8);\
 	PUSH(mPC&0xff);\
-	PUSH(PS()|0x10);\
+	PUSH(PSR()|0x10);\
 \
 	mD=FALSE;\
 	mI=TRUE;\
@@ -564,7 +564,7 @@
 
 #define	xPHP()\
 {\
-	PUSH(PS());\
+	PUSH(PSR());\
 }
 
 #define	xPHX()\
@@ -587,7 +587,7 @@
 {\
 	int P;\
 	PULL(P);\
-	PS(P);\
+	PSR(P);\
 }
 
 #define	xPLX()\
@@ -646,7 +646,7 @@
 {\
 	int tmp;\
 	PULL(tmp);\
-	PS(tmp);\
+	PSR(tmp);\
 	PULL(mPC);\
 	PULL(tmp);\
 	mPC|=tmp<<8;\

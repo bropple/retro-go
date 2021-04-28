@@ -22,6 +22,8 @@ static const char *mbc_names[16] = {
 	"INVALID", "INVALID", "INVALID", "INVALID",
 };
 
+const char * RTC_GB_HW_TIME = "RTCsaveTime";
+
 static FILE* fpRomFile = NULL;
 static FILE *fpSramFile = NULL;
 
@@ -190,7 +192,7 @@ int rom_load(const char *file)
 
 	memcpy(&rom.checksum, header + 0x014E, 2);
 	memcpy(&rom.name, header + 0x0134, 16);
-	rom.name[16] = 0;
+	rom.name[16] = '\0';
 
 	mbc.batt = (type == 3 || type == 6 || type == 9 || type == 13 || type == 15 ||
 				type == 16 || type == 19 || type == 27 || type == 30 || type == 255);
@@ -323,7 +325,7 @@ int sram_load(const char *file)
 		if (fread(ram.sbank, 8192, mbc.ramsize, f))
 		{
 			ram.sram_dirty = 0;
-			rtc_load(f);
+			//rtc_load(f);
 			ret = 0;
 		}
 		fclose(f);
@@ -331,7 +333,6 @@ int sram_load(const char *file)
 
 	return ret;
 }
-
 
 int sram_save(const char *file)
 {

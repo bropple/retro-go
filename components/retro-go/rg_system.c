@@ -35,6 +35,8 @@
 #define SETTING_ROM_FILE_PATH "RomFilePath"
 #define SETTING_START_ACTION  "StartAction"
 #define SETTING_STARTUP_APP   "StartupApp"
+#define SETTING_RTC_ENABLE    "RTCenable"
+
 
 typedef struct
 {
@@ -260,6 +262,10 @@ rg_app_desc_t *rg_system_init(int sampleRate, const rg_emu_proc_t *handlers)
     rg_audio_init(sampleRate);
     rg_input_init();
     rg_system_time_init();
+    
+    //Start up external RTC - must be enabled in the settings first.
+    app.dev = rg_rtc_init();
+    //rg_rtc_debug(rg_rtc_getTime(dev));
 
     if (esp_reset_reason() == ESP_RST_PANIC)
     {
@@ -736,4 +742,78 @@ void *rg_alloc(size_t size, uint32_t mem_type)
 void rg_free(void *ptr)
 {
     return heap_caps_free(ptr);
+}
+
+/* DS3231M Real Time Clock Addon */
+
+i2c_dev_t rg_rtc_init(void)
+{
+    //this will initialize the DS3231M RTC every time the launcher is started.
+    //Error message only pops up if there's a problem with initializing the RTC.
+
+    i2c_dev_t dev;
+    if(rg_settings_get_int32(SETTING_RTC_ENABLE, 0) == 1)
+    {
+
+        if (ds3231_init_desc(&dev, I2C_NUM_0, 15, 4) != ESP_OK)
+        {
+            rg_display_clear(C_RED);
+            rg_gui_alert("DS3231M", "RTC initialization failed!\n Check your HW installation.\n Re-enable in settings.");
+            dev.enabled = false;
+            dev.errored = true;
+            rg_settings_set_int32("RTCstate", 0);
+        }
+        else
+        {
+            RG_LOGI("DS3231M: Initialized!\n");
+        }
+    }
+    else
+    {
+        RG_LOGI("DS3231M: Disabled in settings - will not initialize.\n");
+        dev.enabled = false;
+    }
+    return dev;
+}
+
+struct tm rg_rtc_getTime(i2c_dev_t dev)
+{
+    struct tm time = { 0 };
+
+    if(rg_settings_get_int32(SETTING_RTC_ENABLE, 0) == 1)
+    {
+        if (ds3231_get_time(&dev, &time) != ESP_OK) {
+            rg_display_clear(C_RED);
+            rg_gui_alert("DS3231M",  "ERROR: Failed to get time!\n Check your HW installation.\n Re-enable in settings.");
+            dev.enabled = false;
+            dev.errored = true;
+            rg_settings_set_int32("RTCstate", 0);
+        }
+    }
+    return time;
+}
+
+char * rg_rtc_getMonth_text(int month)
+{
+    char * months_EN[13] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Err" };
+    if(month < 12) return months_EN[month]; //return month in text form
+    else return months_EN[12]; //An error has occured
+}
+
+char * rg_rtc_getDay_text(int wday)
+{
+    char * days_EN[8] = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun", "Err"};
+    if(wday < 7) return days_EN[wday]; //return day in text form
+    else return days_EN[7]; //An error has occured
+}
+
+void rg_rtc_debug(struct tm rtcinfo)
+{
+        //This function brings up a GUI alert with all the time information from the RTC.
+
+        char *message = malloc(39); //[36] = { 0 };
+        sprintf(message, "%04d/%02d/%02d %02d %02d %02d %02d %03d", rtcinfo.tm_year, rtcinfo.tm_mon + 1, rtcinfo.tm_mday, rtcinfo.tm_wday, rtcinfo.tm_hour, rtcinfo.tm_min, rtcinfo.tm_sec, dayOfYear(rtcinfo.tm_year, rtcinfo.tm_mon + 1, rtcinfo.tm_mday));
+        rg_display_clear(C_DARK_VIOLET);
+        rg_gui_alert("DS3231M",  message);
+        free(message);
 }

@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stddef.h>
+#include <time.h>
 
 typedef enum
 {
@@ -123,6 +124,9 @@ void rg_gui_alert(const char *title, const char *message);
 int rg_gui_settings_menu(const dialog_option_t *extra_options);
 int rg_gui_game_settings_menu(const dialog_option_t *extra_options);
 int rg_gui_game_menu(void);
+
+//RTC functions
+void rg_gui_draw_time(struct tm time, int x_pos, int y_pos, int format, bool monthText, bool hourPref);
 
 /* -------------------------------------------------------------------------------- */
 /* -- µGUI COLORS                                                                -- */

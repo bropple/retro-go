@@ -20,6 +20,10 @@ extern "C" {
 #include "rg_gui.h"
 #include "rg_profiler.h"
 #include "rg_settings.h"
+    
+//DS3231M Includes, requires I2C
+#include "rg_ds3231.h"
+#include "rg_i2cdev.h"
 
 typedef enum
 {
@@ -90,6 +94,7 @@ typedef struct
     const char *romPath;
     void *mainTaskHandle;
     rg_emu_proc_t handlers;
+    i2c_dev_t dev;   //I2C struct for the DS3231M RTC
 } rg_app_desc_t;
 
 typedef struct
@@ -150,6 +155,13 @@ void rg_spi_lock_release(spi_lock_res_t);
 
 void *rg_alloc(size_t size, uint32_t caps);
 void rg_free(void *ptr);
+
+//DS3231M functions
+i2c_dev_t rg_rtc_init(void);
+struct tm rg_rtc_getTime(i2c_dev_t dev);
+char * rg_rtc_getMonth_text(int month);
+char * rg_rtc_getDay_text(int wday);
+void rg_rtc_debug(struct tm rtcinfo);
 
 #define MEM_ANY   (0)
 #define MEM_SLOW  (1)

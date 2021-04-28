@@ -1,3 +1,5 @@
+#include <rg_system.h>
+
 #ifndef __LOADER_H__
 #define __LOADER_H__
 
