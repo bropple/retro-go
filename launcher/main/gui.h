@@ -92,11 +92,11 @@ typedef struct {
     int idle_counter;
     int last_key;
     gamepad_state_t joystick;
-    int rtc_enable;
+    bool rtc_enable;
     int rtc_format;
-    int rtc_month_text;
-    int rtc_hour_pref;
-    int rtc_dst;
+    bool rtc_month_text;
+    bool rtc_hour_pref;
+    bool rtc_dst;
 } retro_gui_t;
 
 extern retro_gui_t gui;

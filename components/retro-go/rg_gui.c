@@ -964,17 +964,17 @@ int rg_gui_game_menu(void)
 
 char * ampm_text[2] = {"AM", "PM"};
 
-void rg_gui_draw_time(struct tm time, int x_pos, int y_pos, int format, int monthText, int hourPref)
+void rg_gui_draw_time(struct tm time, int x_pos, int y_pos, int format, bool monthText, bool hourPref)
 {   
     //format: 0 = MDY - Used in United States
     //        1 = DMY - Used in Mexico, South America, Africa, Middle East, ...
     //        2 = YMD - Used in Canada, China, Japan, ...
 
-    //monthText: 0 = Use numeric month notation, i.e. 2/4/2020 or 4/2/2020
-    //           1 = Use text month notation, i.e. Feb 4, 2020 or 4 Feb, 2020
+    //monthText: false = Use numeric month notation, i.e. 2/4/2020 or 4/2/2020
+    //           true = Use text month notation, i.e. Feb 4, 2020 or 4 Feb, 2020
 
-    //hourPref:  0 = 12h - use 12 hour clock
-    //           1 = 24h - use 24 hour clock
+    //hourPref:  false = 12h - use 12 hour clock
+    //           true = 24h - use 24 hour clock
 
     //TODO: Change text placement depending on font size and type.
     //Slim down buffers to use minimum number of bytes, is ballparked right now

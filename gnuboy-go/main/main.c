@@ -41,6 +41,7 @@ static const char *SETTING_RTC_GB_ENABLE    = "RTCgbEnable"; //Gameboy specific 
 static const char *SETTING_RTC_GB_AUTOSYNC  = "RTCgbAutosync"; //Automatic time synchronization during gameplay.
 
 bool RTCgbEnable = false;
+bool RTCautoSync = false;
 // --- MAIN
 
 
@@ -54,12 +55,12 @@ static bool save_state_handler(const char *filename)
     return state_save(filename) == 0;
 }
 
-static void DS3231timeSync(i2c_dev_t dev)
+static void DS3231_timeSync(i2c_dev_t dev)
 {
     //this function checks to see if the ROM is a Pokemon game or hack and syncs it.
-        if(DS3231_gameTimeUpdate(app->dev) == true)
+        if(DS3231_gameTimeUpdate(app->dev))
     {
-        RG_LOGI("RTC game detected! Gnuboy RTC synced from DS3231M.");
+        RG_LOGI("RTC game detected! Gnuboy RTC synced from DS3231M.\n");
     }
 }
 
@@ -77,7 +78,7 @@ static bool load_state_handler(const char *filename)
 
     skipFrames = 0;
     autoSaveSRAM_Timer = 0;
-    DS3231timeSync(app->dev);
+    DS3231_timeSync(app->dev);
     return true;
 }
 
@@ -89,7 +90,7 @@ static bool reset_handler(bool hard)
     skipFrames = 20;
     autoSaveSRAM_Timer = 0;
     
-    DS3231timeSync(app->dev);
+    DS3231_timeSync(app->dev);
 
     return true;
 }
@@ -201,7 +202,7 @@ static dialog_return_t rtc_HWsyncNow_cb(dialog_option_t *option, dialog_event_t 
 {
     if(event == RG_DIALOG_ENTER)
     {
-        DS3231timeSync(app->dev);
+        DS3231_timeSync(app->dev);
         return RG_DIALOG_SELECT;
     }
     return RG_DIALOG_IGNORE;
@@ -217,12 +218,23 @@ static dialog_return_t rtc_gb_enable_cb(dialog_option_t *option, dialog_event_t 
     return RG_DIALOG_IGNORE;
 }
 
+static dialog_return_t rtc_autosync_cb(dialog_option_t *option, dialog_event_t event) //toggles the use of the RTC in actual emulation
+{
+    if (event == RG_DIALOG_PREV || event == RG_DIALOG_NEXT) {
+        RTCautoSync = RTCautoSync ? false : true;
+        rg_settings_set_app_int32(SETTING_RTC_GB_AUTOSYNC, RTCautoSync);
+    }
+    strcpy(option->value, RTCautoSync ? "On" : "Off");
+    return RG_DIALOG_IGNORE;
+}
+
 static dialog_return_t advanced_settings_cb(dialog_option_t *option, dialog_event_t event)
 {
     if (event == RG_DIALOG_ENTER) {
         dialog_option_t options[] = {
             {101, "Use HW RTC", "No", rg_settings_get_int32(SETTING_RTC_ENABLE, 0), &rtc_gb_enable_cb},
-            {102, "Sync HW RTC Now", NULL, (rg_settings_get_int32(SETTING_RTC_ENABLE, 0) && rg_settings_get_app_int32(SETTING_RTC_GB_ENABLE, 0)), &rtc_HWsyncNow_cb},
+            {102, "Auto HW RTC Sync", "Off", (rg_settings_get_int32(SETTING_RTC_ENABLE, 0) && rg_settings_get_app_int32(SETTING_RTC_GB_ENABLE, 0)), &rtc_autosync_cb}, 
+            {103, "Sync HW RTC Now", NULL, (rg_settings_get_int32(SETTING_RTC_ENABLE, 0) && rg_settings_get_app_int32(SETTING_RTC_GB_ENABLE, 0)), &rtc_HWsyncNow_cb},
             {103, "Set Gnuboy Clock", "--:--", (!(rg_settings_get_app_int32(SETTING_RTC_GB_ENABLE, 0))), &rtc_update_cb}, //cannot change when RTC is in sync mode
             RG_DIALOG_SEPARATOR,
             {111, "Autosave SRAM", "Off", mbc.batt && mbc.ramsize, &sram_autosave_cb},
@@ -273,6 +285,7 @@ void app_main(void)
     app = rg_system_init(AUDIO_SAMPLE_RATE, &handlers);
     
     RTCgbEnable = rg_settings_get_app_int32(SETTING_RTC_GB_ENABLE, 0); //boolean value governs in-game usage of HW RTC
+    RTCautoSync = rg_settings_get_app_int32(SETTING_RTC_GB_AUTOSYNC, 0); //governs in-game RTC autosync for supported games.
 
     frames[0].flags = RG_PIXEL_565|RG_PIXEL_BE;
     frames[0].width = GB_WIDTH;
@@ -321,7 +334,8 @@ void app_main(void)
         sram_load(sramFile);
     }
     
-    DS3231timeSync(app->dev);
+    unsigned long frameCounter = 0;
+    DS3231_timeSync(app->dev);
 
     while (true)
     {
@@ -384,6 +398,18 @@ void app_main(void)
         {
             skipFrames--;
         }
+        
+        if(RTCautoSync && RTCgbEnable)
+        {
+            //sync the time every so often, based on frames
+            if((frameCounter % 1800) == 0) 
+            {
+                if(DS3231_gameTimeUpdate(app->dev)) RG_LOGI("DS3231M: RTC synced automatically.\n");
+;
+            }
+        }
+        
+        frameCounter++;
 
         // Tick before submitting audio/syncing
         rg_system_tick(!drawFrame, fullFrame, elapsed);

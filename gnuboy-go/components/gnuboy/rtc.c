@@ -212,6 +212,7 @@ bool DS3231_gameTimeUpdate(i2c_dev_t dev)
         rtc.m = RTCtime.tm_min;
         rtc.s = RTCtime.tm_sec;
         
+        RG_LOGI("DS3231M: Time injection complete.\n");
         return true;
     }
     else return false; //settings not enabled.
