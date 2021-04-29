@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/time.h>
 
 #include "emulators.h"
 #include "favorites.h"
@@ -23,8 +24,7 @@ static const char *SETTING_RTC_DST       = "RTCdst";
 
 struct tm RTCtimeBuf = { 0 }; //time buffer for use in RTC settings
 bool dst = false;
-static rg_app_desc_t *app; //contains RTC device descriptor
-
+static rg_app_desc_t *app; //contains external RTC device descriptor (app->dev)
 
 static dialog_return_t font_type_cb(dialog_option_t *option, dialog_event_t event)
 {
@@ -205,7 +205,7 @@ static dialog_return_t rtc_t_set_cb(dialog_option_t *option, dialog_event_t even
         //2000 min, 2090 max
         if (event == RG_DIALOG_PREV && --RTCtimeBuf.tm_year < 2000) RTCtimeBuf.tm_year = 2100;
         if (event == RG_DIALOG_NEXT && ++RTCtimeBuf.tm_year > 2100) RTCtimeBuf.tm_year = 2000;
-        sprintf(option->value, "%04d", RTCtimeBuf.tm_year);
+        sprintf(option->value, "%04d", RTCtimeBuf.tm_year+1900);
     }
     if(option->id == 'M') {
         if (event == RG_DIALOG_PREV && --RTCtimeBuf.tm_mon < 0) RTCtimeBuf.tm_mon = 11;
@@ -262,7 +262,10 @@ static dialog_return_t rtc_t_set_cb(dialog_option_t *option, dialog_event_t even
                 }
                 rg_settings_set_int32(SETTING_RTC_DST, dst);
                 gui.rtc_dst = dst;
-                ds3231_set_time(&(app->dev), &RTCtimeBuf);
+                //ds3231_set_time(&(app->dev), &RTCtimeBuf);
+                RTCtimeBuf.tm_year -= 1900;
+                struct timeval tv = {mktime(&RTCtimeBuf), 0};
+                settimeofday(&tv, NULL);
                 return RG_DIALOG_SELECT;
             }
             else rg_gui_alert("DS3231M",  "Unable to update HW RTC time!");
@@ -527,7 +530,8 @@ void retro_loop(i2c_dev_t dev)
         //Draw the time in the main menu, only if RTC is enabled in settings AND the i2c device hasn't errored
         if((rg_settings_get_int32(SETTING_RTC_ENABLE, gui.rtc_enable) == 1) && dev.errored == false)
         {
-            RTCtimeBuf = rg_rtc_getTime(dev);
+            time_t now = time(NULL);
+            RTCtimeBuf = *(localtime(&now));
             rg_gui_draw_time(RTCtimeBuf, 58, 0, gui.rtc_format, gui.rtc_month_text, gui.rtc_hour_pref);
         }
 
