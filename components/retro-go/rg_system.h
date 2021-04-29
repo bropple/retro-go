@@ -136,8 +136,8 @@ void rg_system_tick(bool skippedFrame, bool fullFrame, int busyTime);
 rg_app_desc_t *rg_system_get_app();
 runtime_stats_t rg_system_get_stats();
 
-void rg_system_time_init();
-void rg_system_time_save();
+void rg_system_rtc_load(i2c_dev_t dev);
+void rg_system_rtc_save(i2c_dev_t dev);
 
 char *rg_emu_get_path(rg_path_type_t type, const char *romPath);
 bool rg_emu_save_state(int slot);

@@ -36,6 +36,7 @@
 #define SETTING_START_ACTION  "StartAction"
 #define SETTING_STARTUP_APP   "StartupApp"
 #define SETTING_RTC_ENABLE    "RTCenable"
+#define SETTING_RTC_DST       "RTCdst"
 
 
 typedef struct
@@ -165,7 +166,7 @@ static void system_monitor_task(void *arg)
         if (abs(time(NULL) - lastTime) > 60)
         {
             RG_LOGI("System time suddenly changed! Saving...\n");
-            rg_system_time_save();
+            rg_system_rtc_save(app.dev);
         }
         lastTime = time(NULL);
 
@@ -209,14 +210,51 @@ runtime_stats_t rg_system_get_stats()
     return statistics;
 }
 
-void rg_system_time_init()
+void rg_system_rtc_load(i2c_dev_t dev)
 {
     // Query an external RTC or NTP or load saved timestamp from disk
+    if((rg_settings_get_int32(SETTING_RTC_ENABLE, 0) == 1) && !dev.errored)
+    {
+        RG_LOGI("System time before: %li\n", time(NULL));
+        
+        struct tm timeinfo = { 0 };
+        ds3231_get_time(&dev, &timeinfo);
+        
+        //Condition the time_struct to the following functions, because
+        //the RTC unfortunately isn't consistent...
+        
+        timeinfo.tm_wday++;
+        timeinfo.tm_year -=1900;
+        if(rg_settings_get_int32(SETTING_RTC_ENABLE, 0) == 1)
+        {
+            //add DST to the tm struct and add an hour, because it doesn't do it on its own'
+            timeinfo.tm_isdst = 1;
+            timeinfo.tm_hour == 23 ? timeinfo.tm_hour = 0 : timeinfo.tm_hour++;
+        }
+        
+        RG_LOGI("RTC time: %s\n", asctime(&timeinfo)); //asctime adds 1900 to the year in its check
+        
+        struct timeval tv = {mktime(&timeinfo), 0};
+        settimeofday(&tv, NULL);
+        
+        tzset();
+        
+        RG_LOGI("External RTC detected: system time synced! Value: %li\n", time(NULL));
+        RG_LOGI("Local Time: %s\n", asctime(localtime(time(NULL)))); //it FORGETS the time?
+        
+    }
+    else RG_LOGI("External RTC disabled. System time not synced.\n");
 }
 
-void rg_system_time_save()
+void rg_system_rtc_save(i2c_dev_t dev)
 {
-    // Update external RTC or save timestamp to disk
+    // Update external RTC with updated system time (done in retro-go main only!)
+    if((rg_settings_get_int32(SETTING_RTC_ENABLE, 0) == 1) && !dev.errored)
+    {
+        time_t now = time(NULL);
+        struct tm * timeinfo = localtime(&now);
+        ds3231_set_time(&dev, timeinfo);
+    }
 }
 
 rg_app_desc_t *rg_system_init(int sampleRate, const rg_emu_proc_t *handlers)
@@ -261,11 +299,11 @@ rg_app_desc_t *rg_system_init(int sampleRate, const rg_emu_proc_t *handlers)
     rg_gui_draw_hourglass();
     rg_audio_init(sampleRate);
     rg_input_init();
-    rg_system_time_init();
     
     //Start up external RTC - must be enabled in the settings first.
     app.dev = rg_rtc_init();
-    //rg_rtc_debug(rg_rtc_getTime(dev));
+    
+    rg_system_rtc_load(app.dev); //sync time after initializing external RTC - if present
 
     if (esp_reset_reason() == ESP_RST_PANIC)
     {
