@@ -36,7 +36,7 @@ static bool netplay = false;
 static const char *SETTING_SAVESRAM         = "SaveSRAM";
 static const char *SETTING_PALETTE          = "Palette";
 static const char *SETTING_RTC_ENABLE       = "RTCenable"; //System enable of DS3231M hardware RTC
-//static const char *SETTING_RTC_DST        = "RTCdst";
+static const char *SETTING_RTC_DST          = "RTCdst";
 static const char *SETTING_RTC_GB_ENABLE    = "RTCgbEnable"; //Gameboy specific enable of hardware RTC, handy if you want to change time in-game briefly.
 static const char *SETTING_RTC_GB_AUTOSYNC  = "RTCgbAutosync"; //Automatic time synchronization during gameplay.
 
@@ -44,6 +44,89 @@ bool RTCgbEnable = false;
 bool RTCautoSync = false;
 // --- MAIN
 
+bool rtc_gameTimeUpdate()
+{    
+    /*  The purpose of this function is to overwrite the time value of 
+     *  Pokemon Crystal, Pokemon Silver Pokemon Gold, and Pokemon Prism (and maybe other games) with
+     *  the DS3231's own time value in order to synchronize time more like a real cartridge.
+     * 
+     *  This should also work with ROM hacks of a game, as long as the ROM name
+     *  in the header is the same.
+     * 
+     *  Return values:
+     *         true: If the game is recognized and the time has successfully been synced.
+     *         false: If the game is NOT recognized or there was a hardware problem with time retrieval.
+     */
+    
+    // G/S/C default time value: SUNDAY 12:00:00 AM -> Day 0 00:00:00;
+    // Prism default time value: SUNDAY JAN 1 2000(?) 12:00:00 AM
+    
+    //we will first set the start time in the game to zero so the default time value is in effect, and is known.
+    
+    if((rg_settings_get_int32(SETTING_RTC_ENABLE, 0) == 1) && (rg_settings_get_app_int32(SETTING_RTC_GB_ENABLE, 0) == 1))
+    {
+        time_t now = time(NULL);
+        struct tm * time = localtime(&now);
+        
+        if (rg_settings_get_int32(SETTING_RTC_DST, 0) == 1) //if DST mode is toggled add an hour
+        {
+            if(time->tm_hour == 23) time->tm_hour = 0;
+            else time->tm_hour++;
+        }
+        
+        if(strncmp(rom.name, "PM_CRYSTAL", 10) == 0)
+        { //if the game is Pokemon Crystal or closely related ROM hack
+            mem_write(0xD4B6, 0x00); //wStartDay
+            mem_write(0xD4B7, 0x00); //wStartHour
+            mem_write(0xD4B8, 0x00); //wStartMinute
+            mem_write(0xD4B9, 0x00); //wStartSecond
+            
+            //crystal, gold, and silver don't have very advanced timekeeping,
+            //so getting the day of the week is enough
+            rtc.d = time->tm_wday--;
+        }
+        else if(strncmp(rom.name, "POKEMON_SLVAAXE", 15) == 0 || strncmp(rom.name, "POKEMON_GLDAAUE", 15) == 0)
+        { //the addresses for the same variables are different in gold/silver.
+            mem_write(0xD1DC, 0x00); //wStartDay
+            mem_write(0xD1DD, 0x00); //wStartHour
+            mem_write(0xD1DE, 0x00); //wStartMinute
+            mem_write(0xD1DF, 0x00); //wStartSecond
+            
+            rtc.d = time->tm_wday--;
+        }
+        else if(strncmp(rom.name, "PM_PRISM", 8) == 0)
+        {   //Prism is very different.
+            mem_write(0xDFE8, 0x00); //wRTCbaseDay
+            mem_write(0xDFE9, 0x00); //wRTCbaseHours
+            mem_write(0xDFEA, 0x00); //wRTCbaseMinutes
+            mem_write(0xDFEB, 0x00); //wRTCbaseSeconds
+            mem_write(0xDFEC, 0x00); //wRTCbaseYear
+            mem_write(0xDFED, 0x00); //wRTCbaseMonth
+            
+            //prism keeps track of month, day, and year, yday seems to get us closer to what we want.
+            //The year in the game seems to be wrong, screwing up the calendar slightly.
+            
+            rtc.d = time->tm_yday;
+        }
+        
+        else return false; //the game is not a recognized RTC game.
+        
+        //With the start time set to zero, direct time setting works as expected.
+        //prism is more complicated than this... or not!
+        
+        rtc.h = time->tm_hour;
+        rtc.m = time->tm_min;
+        rtc.s = time->tm_sec;
+        
+        RG_LOGI("Game time sync complete.\n");
+        return true;
+    }
+    else
+    {
+        rtc_sync(); //Still sync rtc with system time.
+        return false; //settings not enabled.
+    }
+}
 
 static bool screenshot_handler(const char *filename, int width, int height)
 {
@@ -55,22 +138,13 @@ static bool save_state_handler(const char *filename)
     return state_save(filename) == 0;
 }
 
-static void DS3231_timeSync(i2c_dev_t dev)
-{
-    //this function checks to see if the ROM is a Pokemon game or hack and syncs it.
-        if(DS3231_gameTimeUpdate(app->dev))
-    {
-        RG_LOGI("RTC game detected! Gnuboy RTC synced from DS3231M.\n");
-    }
-}
-
 static bool load_state_handler(const char *filename)
 {
     if (state_load(filename) != 0)
     {
         // If a state fails to load then we should behave as we do on boot
         // which is a hard reset and load sram if present
-        emu_reset(true, app->dev);
+        emu_reset(true);
         sram_load(sramFile);
 
         return false;
@@ -78,19 +152,19 @@ static bool load_state_handler(const char *filename)
 
     skipFrames = 0;
     autoSaveSRAM_Timer = 0;
-    DS3231_timeSync(app->dev);
+    rtc_gameTimeUpdate();
     return true;
 }
 
 static bool reset_handler(bool hard)
 {
-    emu_reset(hard, app->dev);
+    emu_reset(hard);
 
     fullFrame = false;
     skipFrames = 20;
     autoSaveSRAM_Timer = 0;
     
-    DS3231_timeSync(app->dev);
+    rtc_gameTimeUpdate();
 
     return true;
 }
@@ -158,6 +232,7 @@ static dialog_return_t sram_autosave_cb(dialog_option_t *option, dialog_event_t 
 
 static dialog_return_t rtc_t_update_cb(dialog_option_t *option, dialog_event_t event)
 {
+    //This should only change gnuboy's emulated RTC, not the external!
     if (option->id == 'd') {
         if (event == RG_DIALOG_PREV && --rtc.d < 0) rtc.d = 364;
         if (event == RG_DIALOG_NEXT && ++rtc.d > 364) rtc.d = 0;
@@ -202,7 +277,7 @@ static dialog_return_t rtc_HWsyncNow_cb(dialog_option_t *option, dialog_event_t 
 {
     if(event == RG_DIALOG_ENTER)
     {
-        DS3231_timeSync(app->dev);
+        rtc_sync(); //this will re-synchronize gnuboy rtc with system clock if it is changed by user
         return RG_DIALOG_SELECT;
     }
     return RG_DIALOG_IGNORE;
@@ -233,7 +308,7 @@ static dialog_return_t advanced_settings_cb(dialog_option_t *option, dialog_even
     if (event == RG_DIALOG_ENTER) {
         dialog_option_t options[] = {
             {101, "Use HW RTC", "No", rg_settings_get_int32(SETTING_RTC_ENABLE, 0), &rtc_gb_enable_cb},
-            {102, "Auto HW RTC Sync", "Off", (rg_settings_get_int32(SETTING_RTC_ENABLE, 0) && rg_settings_get_app_int32(SETTING_RTC_GB_ENABLE, 0)), &rtc_autosync_cb}, 
+            //{102, "Auto HW RTC Sync", "Off", (rg_settings_get_int32(SETTING_RTC_ENABLE, 0) && rg_settings_get_app_int32(SETTING_RTC_GB_ENABLE, 0)), &rtc_autosync_cb}, //shouldn't need with system clock
             {103, "Sync HW RTC Now", NULL, (rg_settings_get_int32(SETTING_RTC_ENABLE, 0) && rg_settings_get_app_int32(SETTING_RTC_GB_ENABLE, 0)), &rtc_HWsyncNow_cb},
             {103, "Set Gnuboy Clock", "--:--", (!(rg_settings_get_app_int32(SETTING_RTC_GB_ENABLE, 0))), &rtc_update_cb}, //cannot change when RTC is in sync mode
             RG_DIALOG_SEPARATOR,
@@ -334,8 +409,8 @@ void app_main(void)
         sram_load(sramFile);
     }
     
-    unsigned long frameCounter = 0;
-    DS3231_timeSync(app->dev);
+    //unsigned long frameCounter = 0;
+    rtc_gameTimeUpdate();
 
     while (true)
     {
@@ -399,17 +474,16 @@ void app_main(void)
             skipFrames--;
         }
         
-        if(RTCautoSync && RTCgbEnable)
-        {
+        //if(RTCautoSync && RTCgbEnable)
+        //{
             //sync the time every so often, based on frames
-            if((frameCounter % 1800) == 0) 
-            {
-                if(DS3231_gameTimeUpdate(app->dev)) RG_LOGI("DS3231M: RTC synced automatically.\n");
-;
-            }
-        }
+            //if((frameCounter % 1800) == 0) 
+            //{
+                //if(DS3231_gameTimeUpdate(app->dev)) RG_LOGI("DS3231M: RTC synced automatically.\n");
+            //}
+        //}
         
-        frameCounter++;
+        //frameCounter++;
 
         // Tick before submitting audio/syncing
         rg_system_tick(!drawFrame, fullFrame, elapsed);

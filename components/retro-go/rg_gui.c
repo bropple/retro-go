@@ -996,8 +996,6 @@ void rg_gui_draw_time(struct tm time, int x_pos, int y_pos, int format, bool mon
     int time_width = 168;
     int ampm_pos = 230;
     int day_pos = 265;
-    
-    time.tm_year += 1900;
 
     if (!hourPref)
     {

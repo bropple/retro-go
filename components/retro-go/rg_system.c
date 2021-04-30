@@ -215,23 +215,12 @@ void rg_system_rtc_load(i2c_dev_t dev)
     // Query an external RTC or NTP or load saved timestamp from disk
     if((rg_settings_get_int32(SETTING_RTC_ENABLE, 0) == 1) && !dev.errored)
     {
-        //RG_LOGI("System time before: %li\n", time(NULL));
-        
         struct tm timeinfo = { 0 };
         ds3231_get_time(&dev, &timeinfo);
         
         //Condition the DS3231 time_struct to C standard library time function conventions
         timeinfo.tm_wday++;
         timeinfo.tm_year -= 1900;
-        
-        //if(rg_settings_get_int32(SETTING_RTC_ENABLE, 0) == 1)
-        //{
-        //    //add DST to the tm struct and add an hour, because it doesn't do it on its own
-        //    timeinfo.tm_isdst = 1;
-        //    timeinfo.tm_hour == 23 ? timeinfo.tm_hour = 0 : timeinfo.tm_hour++;
-        //}
-        
-        //RG_LOGI("RTC time: %s\n", asctime(&timeinfo));
         
         struct timeval tv = {mktime(&timeinfo), 0};
         settimeofday(&tv, NULL);
@@ -252,12 +241,17 @@ void rg_system_rtc_save(i2c_dev_t dev)
     {
         time_t now = time(NULL);
         struct tm * timeinfo = localtime(&now);
+
+        //De-condition for translation back to the DS3231M functions
+        //Simply the opposite procedure done when loading
         
         timeinfo->tm_wday--;
         timeinfo->tm_year += 1900;
         
         ds3231_set_time(&dev, timeinfo);
-        RG_LOGI("Updated system time saved to external RTC.\n");
+        //rg_rtc_debug(rg_rtc_getTime(dev));
+        
+        RG_LOGI("Updated system time and saved to external RTC.\n");
         
     }
     else RG_LOGI("External RTC disabled. System time not saved to external RTC.\n");

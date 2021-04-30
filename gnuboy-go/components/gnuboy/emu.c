@@ -8,9 +8,9 @@
 #include "rtc.h"
 
 
-void emu_init(i2c_dev_t dev)
+void emu_init()
 {
-	emu_reset(true, dev);
+	emu_reset(true);
 }
 
 /*
@@ -18,10 +18,10 @@ void emu_init(i2c_dev_t dev)
  * system. It should set cpu registers, hardware registers, etc. to
  * their appropriate values at power up time.
  */
-void emu_reset(bool hard, i2c_dev_t dev)
+void emu_reset(bool hard)
 {
 	hw_reset(hard);
-	rtc_reset(hard, dev);
+	rtc_reset(hard);
 	lcd_reset(hard);
 	cpu_reset(hard);
 	mem_reset(hard);

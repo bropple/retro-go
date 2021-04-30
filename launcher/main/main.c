@@ -205,7 +205,7 @@ static dialog_return_t rtc_t_set_cb(dialog_option_t *option, dialog_event_t even
         //2000 min, 2090 max
         if (event == RG_DIALOG_PREV && --RTCtimeBuf.tm_year < 2000) RTCtimeBuf.tm_year = 2100;
         if (event == RG_DIALOG_NEXT && ++RTCtimeBuf.tm_year > 2100) RTCtimeBuf.tm_year = 2000;
-        sprintf(option->value, "%04d", RTCtimeBuf.tm_year+1900);
+        sprintf(option->value, "%04d", RTCtimeBuf.tm_year);
     }
     if(option->id == 'M') {
         if (event == RG_DIALOG_PREV && --RTCtimeBuf.tm_mon < 0) RTCtimeBuf.tm_mon = 11;
@@ -532,6 +532,9 @@ void retro_loop(i2c_dev_t dev)
         {
             time_t now = time(NULL);
             RTCtimeBuf = *(localtime(&now));
+            //time struct needs re-adjustment for rtc settings and display function
+            RTCtimeBuf.tm_year += 1900;
+            RTCtimeBuf.tm_wday--;
             rg_gui_draw_time(RTCtimeBuf, 58, 0, gui.rtc_format, gui.rtc_month_text, gui.rtc_hour_pref);
         }
 
