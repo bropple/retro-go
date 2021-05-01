@@ -197,8 +197,6 @@ static dialog_return_t rtc_dst_cb(dialog_option_t *option, dialog_event_t event)
     return RG_DIALOG_ENTER;
 }
 
-//TODO: Make HW RTC time update settings work for 12 hour mode as well.
-
 static dialog_return_t rtc_t_set_cb(dialog_option_t *option, dialog_event_t event)
 {
     if(option->id == 'Y') {
@@ -535,7 +533,7 @@ void retro_loop(i2c_dev_t dev)
             //time struct needs re-adjustment for rtc settings and display function
             RTCtimeBuf.tm_year += 1900;
             RTCtimeBuf.tm_wday--;
-            rg_gui_draw_time(RTCtimeBuf, 58, 0, gui.rtc_format, gui.rtc_month_text, gui.rtc_hour_pref);
+            rg_gui_draw_time(RTCtimeBuf, gui.rtc_format, gui.rtc_month_text, gui.rtc_hour_pref, true);
         }
 
         usleep(15 * 1000UL);

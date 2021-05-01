@@ -219,6 +219,7 @@ void rg_system_rtc_load(i2c_dev_t dev)
         ds3231_get_time(&dev, &timeinfo);
         
         //Condition the DS3231 time_struct to C standard library time function conventions
+        //mktime is incorrect if this is not done!
         timeinfo.tm_wday++;
         timeinfo.tm_year -= 1900;
         

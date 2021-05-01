@@ -11,11 +11,6 @@ rtc_t rtc;
 // Set in the far future for VBA-M support
 #define RT_BASE 1893456000
 
-static const char *SETTING_RTC_ENABLE = "RTCenable";
-static const char *SETTING_RTC_DST      = "RTCdst";
-static const char *SETTING_RTC_GB_ENABLE    = "RTCgbEnable";
-
-
 void rtc_reset(bool hard)
 {
 	if (hard)

@@ -59,7 +59,7 @@ bool rtc_gameTimeUpdate()
      */
     
     // G/S/C default time value: SUNDAY 12:00:00 AM -> Day 0 00:00:00;
-    // Prism default time value: SUNDAY JAN 1 2000(?) 12:00:00 AM
+    // Prism default time value: SUNDAY JAN 1 2000 12:00:00 AM
     
     //we will first set the start time in the game to zero so the default time value is in effect, and is known.
     
@@ -100,7 +100,7 @@ bool rtc_gameTimeUpdate()
             mem_write(0xDFE9, 0x00); //wRTCbaseHours
             mem_write(0xDFEA, 0x00); //wRTCbaseMinutes
             mem_write(0xDFEB, 0x00); //wRTCbaseSeconds
-            mem_write(0xDFEC, 0x00); //wRTCbaseYear
+            mem_write(0xDFEC, time->tm_year-100); //wRTCbaseYear, because default year is 2000 we can just do this to get the right year.
             mem_write(0xDFED, 0x00); //wRTCbaseMonth
             
             //prism keeps track of month, day, and year, yday seems to get us closer to what we want.
@@ -277,7 +277,7 @@ static dialog_return_t rtc_HWsyncNow_cb(dialog_option_t *option, dialog_event_t 
 {
     if(event == RG_DIALOG_ENTER)
     {
-        rtc_sync(); //this will re-synchronize gnuboy rtc with system clock if it is changed by user
+        rtc_gameTimeUpdate(); //this will re-synchronize gnuboy rtc with system clock if it is changed by user
         return RG_DIALOG_SELECT;
     }
     return RG_DIALOG_IGNORE;
@@ -308,9 +308,9 @@ static dialog_return_t advanced_settings_cb(dialog_option_t *option, dialog_even
     if (event == RG_DIALOG_ENTER) {
         dialog_option_t options[] = {
             {101, "Use HW RTC", "No", rg_settings_get_int32(SETTING_RTC_ENABLE, 0), &rtc_gb_enable_cb},
-            //{102, "Auto HW RTC Sync", "Off", (rg_settings_get_int32(SETTING_RTC_ENABLE, 0) && rg_settings_get_app_int32(SETTING_RTC_GB_ENABLE, 0)), &rtc_autosync_cb}, //shouldn't need with system clock
+            {102, "Auto HW RTC Sync", "Off", (rg_settings_get_int32(SETTING_RTC_ENABLE, 0) && rg_settings_get_app_int32(SETTING_RTC_GB_ENABLE, 0)), &rtc_autosync_cb},
             {103, "Sync HW RTC Now", NULL, (rg_settings_get_int32(SETTING_RTC_ENABLE, 0) && rg_settings_get_app_int32(SETTING_RTC_GB_ENABLE, 0)), &rtc_HWsyncNow_cb},
-            {103, "Set Gnuboy Clock", "--:--", (!(rg_settings_get_app_int32(SETTING_RTC_GB_ENABLE, 0))), &rtc_update_cb}, //cannot change when RTC is in sync mode
+            {103, "Set Gnuboy Clock", "--:--", (!(rg_settings_get_app_int32(SETTING_RTC_GB_ENABLE, 0))), &rtc_update_cb}, //cannot change when RTC is in sync mode, turn off to change anytime
             RG_DIALOG_SEPARATOR,
             {111, "Autosave SRAM", "Off", mbc.batt && mbc.ramsize, &sram_autosave_cb},
             {112, "Save SRAM Now ", NULL, mbc.batt && mbc.ramsize, &sram_save_now_cb},
@@ -409,7 +409,7 @@ void app_main(void)
         sram_load(sramFile);
     }
     
-    //unsigned long frameCounter = 0;
+    unsigned long frameCounter = 0;
     rtc_gameTimeUpdate();
 
     while (true)
@@ -474,16 +474,16 @@ void app_main(void)
             skipFrames--;
         }
         
-        //if(RTCautoSync && RTCgbEnable)
-        //{
+        if(RTCautoSync && RTCgbEnable)
+        {
             //sync the time every so often, based on frames
-            //if((frameCounter % 1800) == 0) 
-            //{
-                //if(DS3231_gameTimeUpdate(app->dev)) RG_LOGI("DS3231M: RTC synced automatically.\n");
-            //}
-        //}
+            if((frameCounter % 1800) == 0) 
+            {
+                if(rtc_gameTimeUpdate()) RG_LOGI("RTC synced automatically.\n");
+            }
+        }
         
-        //frameCounter++;
+        frameCounter++;
 
         // Tick before submitting audio/syncing
         rg_system_tick(!drawFrame, fullFrame, elapsed);

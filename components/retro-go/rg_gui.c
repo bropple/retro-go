@@ -968,10 +968,13 @@ int rg_gui_game_menu(void)
     return r;
 }
 
-char * ampm_text[2] = {"AM", "PM"};
-
-void rg_gui_draw_time(struct tm time, int x_pos, int y_pos, int format, bool monthText, bool hourPref)
+void rg_gui_draw_time(struct tm time, int format, bool monthText, bool hourPref, bool isMainMenu)
 {   
+    /*  This function takes a struct tm and draws it on the display.
+     *  It checks the current font to determine widths.
+     */
+    
+    
     //format: 0 = MDY - Used in United States
     //        1 = DMY - Used in Mexico, South America, Africa, Middle East, ...
     //        2 = YMD - Used in Canada, China, Japan, ...
@@ -983,19 +986,37 @@ void rg_gui_draw_time(struct tm time, int x_pos, int y_pos, int format, bool mon
     //           true = 24h - use 24 hour clock
 
     //TODO: Change text placement depending on font size and type.
-    //Slim down buffers to use minimum number of bytes, is ballparked right now
+    
+    //standard position of the drawn time
+    
+    char *time_buff = malloc(72);
+    char * ampm_text[2] = {"AM", "PM"};
+    int ampm = 2; //0 for am, 1 for pm, 2 for 24h
+    int time_width = 168;
+    int ampm_pos = 230;
+    int day_pos = 265;
+    int x_pos = 0;
+    int y_pos = 0;
+    
+    if(isMainMenu)
+    {
+        x_pos = 58;
+        y_pos = 0;
+    }
+    else
+    {
+        //TODO: change the position for game pause menus
+        x_pos = 58;
+        y_pos = 0;
+    }
 
     if (rg_settings_get_int32(SETTING_RTC_DST, 0) == 1) //if DST mode is toggled add an hour
     {
         if(time.tm_hour == 23) time.tm_hour = 0;
         else time.tm_hour++;
     }
-
-    char *time_buff = malloc(72);
-    int ampm = 2; //0 for am, 1 for pm, 2 for 24h
-    int time_width = 168;
-    int ampm_pos = 230;
-    int day_pos = 265;
+    
+    font_info_t info = rg_gui_get_font_info(); //need font info for more proper spacing
 
     if (!hourPref)
     {
@@ -1031,7 +1052,7 @@ void rg_gui_draw_time(struct tm time, int x_pos, int y_pos, int format, bool mon
     else //we have month text
     {
         //These formats show month text instead of number, so we grab the text
-        char * time_temp = malloc(36);
+        char * time_temp = malloc(62);
         if (format == 0)
         {
             //Month, Day, Year
@@ -1059,9 +1080,15 @@ void rg_gui_draw_time(struct tm time, int x_pos, int y_pos, int format, bool mon
         }
         free(time_temp);
     }
+    
+    //dynamic text width
+    //this could get messy with a lot of fonts
+    time_width = strlen(time_buff) * info.width;
+    ampm_pos = time_width + (8*info.width);
+    day_pos = ampm_pos + (4*info.width);
 
-    rg_gui_draw_text(x_pos, y_pos, time_width, time_buff, C_WHITE, C_BLACK, 0);
-    if(ampm < 2) rg_gui_draw_text(ampm_pos, y_pos, 16, ampm_text[ampm], C_WHITE, C_BLACK, 0);
-    rg_gui_draw_text(day_pos, y_pos, 24, rg_rtc_getDay_text(time.tm_wday), C_WHITE, C_BLACK, 0);
+    rg_gui_draw_text(x_pos, y_pos, time_width, time_buff, C_WHITE, C_BLACK, 0);                  //draw the time
+    if(ampm < 2) rg_gui_draw_text(ampm_pos, y_pos, 16, ampm_text[ampm], C_WHITE, C_BLACK, 0);    //draw am/pm indicator if it's enabled
+    rg_gui_draw_text(day_pos, y_pos, 24, rg_rtc_getDay_text(time.tm_wday), C_WHITE, C_BLACK, 0); //draw the day next to the battery
     free(time_buff);
 }
