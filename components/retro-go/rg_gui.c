@@ -994,7 +994,7 @@ void rg_gui_draw_time(struct tm time, int format, bool monthText, bool hourPref,
     int ampm = 2; //0 for am, 1 for pm, 2 for 24h
     int time_width = 168;
     int ampm_pos = 230;
-    int day_pos = 265;
+    int day_pos = 260;
     int x_pos = 0;
     int y_pos = 0;
     
@@ -1083,12 +1083,22 @@ void rg_gui_draw_time(struct tm time, int format, bool monthText, bool hourPref,
     
     //dynamic text width
     //this could get messy with a lot of fonts
-    time_width = strlen(time_buff) * info.width;
-    ampm_pos = time_width + (8*info.width);
-    day_pos = ampm_pos + (4*info.width);
+    //time_width = strlen(time_buff) * info.width;
+    //ampm_pos = time_width + (8*info.width);
+    //day_pos = ampm_pos + (4*info.width);
+    
+    int f = rg_gui_get_font_info().type;
+    rg_gui_set_font_type(0);
 
     rg_gui_draw_text(x_pos, y_pos, time_width, time_buff, C_WHITE, C_BLACK, 0);                  //draw the time
     if(ampm < 2) rg_gui_draw_text(ampm_pos, y_pos, 16, ampm_text[ampm], C_WHITE, C_BLACK, 0);    //draw am/pm indicator if it's enabled
     rg_gui_draw_text(day_pos, y_pos, 24, rg_rtc_getDay_text(time.tm_wday), C_WHITE, C_BLACK, 0); //draw the day next to the battery
+    
+    //RG_LOGI("Printed time is %s.\n", time_buff);
+    //RG_LOGI("Printed day is %s.\n", rg_rtc_getDay_text(time.tm_wday));
+    //RG_LOGI("Wday value us %d.\n", time.tm_wday);
+    
+    rg_gui_set_font_type(f);
+    
     free(time_buff);
 }

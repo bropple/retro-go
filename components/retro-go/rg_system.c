@@ -841,7 +841,7 @@ char * rg_rtc_getMonth_text(int month)
 
 char * rg_rtc_getDay_text(int wday)
 {
-    char * days_EN[8] = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun", "Err"};
+    char * days_EN[8] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Err"};
     if(wday < 7) return days_EN[wday]; //return day in text form
     else return days_EN[7]; //An error has occured
 }

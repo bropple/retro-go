@@ -221,7 +221,7 @@ static dialog_return_t rtc_t_set_cb(dialog_option_t *option, dialog_event_t even
     if (option->id == 'D') {
         if (event == RG_DIALOG_PREV && --RTCtimeBuf.tm_wday < 0) RTCtimeBuf.tm_wday = 6;
         if (event == RG_DIALOG_NEXT && ++RTCtimeBuf.tm_wday > 6) RTCtimeBuf.tm_wday = 0;
-        const char *values[7] = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"};
+        const char *values[7] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
         strcpy(option->value, values[RTCtimeBuf.tm_wday]);
     }
     if (option->id == 'h') {
@@ -532,7 +532,7 @@ void retro_loop(i2c_dev_t dev)
             RTCtimeBuf = *(localtime(&now));
             //time struct needs re-adjustment for rtc settings and display function
             RTCtimeBuf.tm_year += 1900;
-            RTCtimeBuf.tm_wday--;
+            //RTCtimeBuf.tm_wday--;
             rg_gui_draw_time(RTCtimeBuf, gui.rtc_format, gui.rtc_month_text, gui.rtc_hour_pref, true);
         }
 
