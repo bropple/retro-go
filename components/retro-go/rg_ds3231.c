@@ -135,7 +135,7 @@ uint16_t dayOfYear(uint16_t y, uint8_t m, uint8_t d) {
   uint8_t daysInMonth[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
   uint16_t doy = d;
   
-  if( (y % 4 == 0 && y % 100 != 0 ) || (y % 4 == 0) )
+  if(isLeapYear(y))
     {
         daysInMonth[1] = 29; //Leap Year, Feb has 29 days instead of 28
     }
@@ -145,4 +145,10 @@ uint16_t dayOfYear(uint16_t y, uint8_t m, uint8_t d) {
 	}
 	
   return doy; //return number of days
+}
+
+bool isLeapYear(uint16_t y)
+{
+    if((y % 4 == 0 && y % 100 != 0 ) || (y % 4 == 0)) return true;
+    else return false;
 }

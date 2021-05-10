@@ -846,6 +846,43 @@ char * rg_rtc_getDay_text(int wday)
     else return days_EN[7]; //An error has occured
 }
 
+struct tm rg_rtc_handleDST(struct tm timeinfo)
+{
+            //adding an hour at midnight, the end of month, or end of year can cause problems
+            //so fixing it here
+    
+            uint8_t daysInMonth[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+            if(isLeapYear(timeinfo.tm_year))
+            {
+                daysInMonth[1] = 29; //Leap Year, Feb has 29 days instead of 28
+            }
+            if(timeinfo.tm_hour == 23) 
+            {
+                timeinfo.tm_wday == 6 ? timeinfo.tm_wday = 0 : timeinfo.tm_wday++;
+                if(timeinfo.tm_mday == daysInMonth[timeinfo.tm_mon])
+                {
+                    if(timeinfo.tm_mon == 11)
+                    {
+                        timeinfo.tm_mon = 0;
+                        timeinfo.tm_mday = 1;
+                        timeinfo.tm_year++;
+                        timeinfo.tm_yday = 0;
+                    }
+                    else timeinfo.tm_mon++;
+                    timeinfo.tm_mday = 1;
+                }
+                else 
+                {
+                    timeinfo.tm_mday++;
+                }
+                timeinfo.tm_hour = 0;
+                timeinfo.tm_yday++;
+            }
+            else timeinfo.tm_hour++;
+            
+            return timeinfo;
+}
+
 void rg_rtc_debug(struct tm rtcinfo)
 {
         //This function brings up a GUI alert with all the time information from the RTC.

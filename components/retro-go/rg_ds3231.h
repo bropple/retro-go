@@ -47,5 +47,6 @@ esp_err_t ds3231_get_temp_integer(i2c_dev_t *dev, int8_t *temp);
 esp_err_t ds3231_get_temp_float(i2c_dev_t *dev, float *temp);
 esp_err_t ds3231_get_time(i2c_dev_t *dev, struct tm *time);
 uint16_t dayOfYear(uint16_t y, uint8_t m, uint8_t d);
+bool isLeapYear(uint16_t y);
 #endif /* MAIN_DS3231_H_ */
 

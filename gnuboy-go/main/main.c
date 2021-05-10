@@ -66,12 +66,13 @@ bool rtc_gameTimeUpdate()
     if((rg_settings_get_int32(SETTING_RTC_ENABLE, 0) == 1) && (rg_settings_get_app_int32(SETTING_RTC_GB_ENABLE, 0) == 1))
     {
         time_t now = time(NULL);
-        struct tm * time = localtime(&now);
+        struct tm time = *(localtime(&now));
         
         if (rg_settings_get_int32(SETTING_RTC_DST, 0) == 1) //if DST mode is toggled add an hour
         {
-            if(time->tm_hour == 23) time->tm_hour = 0;
-            else time->tm_hour++;
+            //if(time->tm_hour == 23) time->tm_hour = 0;
+            //else time->tm_hour++;
+            time = rg_rtc_handleDST(time);
         }
         
         if(strncmp(rom.name, "PM_CRYSTAL", 10) == 0)
@@ -83,7 +84,7 @@ bool rtc_gameTimeUpdate()
             
             //crystal, gold, and silver don't have very advanced timekeeping,
             //so getting the day of the week is enough
-            rtc.d = time->tm_wday--;
+            rtc.d = time.tm_wday--;
         }
         else if(strncmp(rom.name, "POKEMON_SLVAAXE", 15) == 0 || strncmp(rom.name, "POKEMON_GLDAAUE", 15) == 0)
         { //the addresses for the same variables are different in gold/silver.
@@ -92,7 +93,7 @@ bool rtc_gameTimeUpdate()
             mem_write(0xD1DE, 0x00); //wStartMinute
             mem_write(0xD1DF, 0x00); //wStartSecond
             
-            rtc.d = time->tm_wday--;
+            rtc.d = time.tm_wday--;
         }
         else if(strncmp(rom.name, "PM_PRISM", 8) == 0)
         {   //Prism is very different.
@@ -100,13 +101,12 @@ bool rtc_gameTimeUpdate()
             mem_write(0xDFE9, 0x00); //wRTCbaseHours
             mem_write(0xDFEA, 0x00); //wRTCbaseMinutes
             mem_write(0xDFEB, 0x00); //wRTCbaseSeconds
-            mem_write(0xDFEC, time->tm_year-100); //wRTCbaseYear, because default year is 2000 we can just do this to get the right year.
+            mem_write(0xDFEC, time.tm_year-100); //wRTCbaseYear, because default year is 2000 we can just do this to get the right year.
             mem_write(0xDFED, 0x00); //wRTCbaseMonth
             
-            //prism keeps track of month, day, and year, yday seems to get us closer to what we want.
-            //The year in the game seems to be wrong, screwing up the calendar slightly.
+            //prism keeps track of month, day, and year.
             
-            rtc.d = time->tm_yday;
+            rtc.d = time.tm_yday;
         }
         
         else return false; //the game is not a recognized RTC game.
@@ -114,9 +114,9 @@ bool rtc_gameTimeUpdate()
         //With the start time set to zero, direct time setting works as expected.
         //prism is more complicated than this... or not!
         
-        rtc.h = time->tm_hour;
-        rtc.m = time->tm_min;
-        rtc.s = time->tm_sec;
+        rtc.h = time.tm_hour;
+        rtc.m = time.tm_min;
+        rtc.s = time.tm_sec;
         
         RG_LOGI("Game time sync complete.\n");
         return true;
