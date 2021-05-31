@@ -16,7 +16,9 @@ It comes with many emulators!
 ### Retro-Go features:
 - In-game menu
 - Favorites support
+- DS3231M Hardware RTC compatibility
 - GB RTC adjust and save
+- GB RTC synchronization with HW RTC
 - GB GBC colorization palettes
 - More scaling options
 - Bilinear filtering
@@ -96,6 +98,66 @@ To recap: If you set a reasonable save delay (10-30s) and you briefly open the m
 # Known issues
 An up to date list of incompatible/broken games can be found on the [ODROID-GO forum](https://forum.odroid.com/viewtopic.php?f=159&t=37599). This is also the place to submit bug reports and feature requests.
 
+# Using the DS3231M Hardware RTC Add-On
+retro-go is compatible with the DS3231M I2C RTC, which allows the system to keep track of time even when powered off. The RTC chip and a CR2016 battery can be permanently installed inside the case. The CR2016 battery should power the RTC chip for about 10 years before requiring replacement. If you wish to install the add-on, please read the following sections carefully! 
+
+You can find installation instructions for the RTC chip on this [ODROID-GO forum post](https://forum.odroid.com/viewtopic.php?f=162&t=41609).
+
+When retro-go is installed without the RTC add-on, you will be notified on the first boot. If you aren't planning on installing the add-on, you will only see this notification once. If you install it at a later time, it must be manually enabled in the HW RTC settings from the launcher's settings menu.
+
+The main benefit of the RTC add-on is the ability to synchronize the time with supported Game Boy / Game Boy Color titles. A list of titles compatible with retro-go are listed below:
+
+| Game | System |
+| ---- | ------ |
+| Pokemon Gold | GB / GBC |
+| Pokemon Silver | GB /GBC |
+| Pokemon Crystal | GBC |
+| Pokemon Prism | GBC (ROM hack) |
+More titles may be added in the future.
+
+Most ROM hacks of supported games will work fine, since most of them share the same `rom.name` as the original. Pokemon Prism's timekeeping is more complicated than the original games, but is also fully supported by retro-go as a special case.
+
+## Setting the time
+After installing the hardware, the displayed time is bound to be incorrect. The time can be set from the launcher's settings menu:
+
+```
+HW RTC Settings -> Date/Time Settings -> Set Date & Time
+```
+In this submenu, you will enter the requested time parameters, including whether or not Daylight Saving Time is in effect (if your country doesn't use DST, this can safely be ignored). The suggested way to do this is to fill in the current time and set the seconds to a future time, and press `Save Changes` about a half-second before the desired time. After following this procedure, the time should now be set. It can be changed again at any time.
+
+## Launcher
+There are time-related parameters exclusive to the launcher. Each parameter and its function is discussed in the following section.
+
+### Configurable Parameters
+In `HW RTC Settings`, the RTC can be enabled or disabled completely by toggling the `Master Enable` parameter. Note that this enables or disables timekeeping for all emulators!
+
+In `HW RTC Settings -> Date/Time Settings`, a number of parameters can be configured for the displayed time at the top of the main menu and inside emulator setting menus. These are listed in the table below:
+
+| Setting | Function |
+| ------- | -------- |
+| Date Format | Change the order the Month, Day, and Year is displayed in |
+| Month Text | Display the month as 3-letter text instead of numerically |
+| 12h or 24h | Switch between 12 hour (AM/PM) or 24 hour time display |
+| DST | Enable or disable Daylight Savings Time |
+
+## GNUboy
+There are time-related parameters exclusive to the GNUboy GB/GBC emulator. These parameters and their functions are discussed in the following section.
+
+### Configuable Parameters
+RTC-Specific parameters are found in the options menu, in the `More...` submenu. These are listed in the table below:
+
+| Setting | Function |
+| ------- | -------- |
+| Use HW RTC | Enables or disables HW RTC, only affects GNUboy |
+| Auto HW RTC Sync | Periodically sync in-game time with HW RTC during gameplay (No slowdown) |
+| Sync HW RTC Now | Sync in-game time with HW RTC immediately |
+
+When `Use HW RTC` is enabled, you cannot manually change GNUboy's clock. If you wish to change the in-game time temporarily, you can disable this setting and then manually change the clock by exiting and re-entering the `More...` submenu. RTC synchronization can be resumed by re-enabling `Use HW RTC`.
+
+The HW RTC time will be syncronized regardless of the time set in-game, so it will work for old saves.
+
+When starting new Pokemon games, you will still have to set the time at the beginning, it doesn't matter what you set it to. After leaving the player's home, you can either manually sync the HW RTC or wait for the auto sync to work. The new time should be reflected in the PokeGear menu.
+
 
 # Future plans / Feature requests
 - SNES emulation (In progress)
@@ -162,6 +224,8 @@ I don't want to maintain non-ESP32 ports in this repository but let me know if I
 - The SNES emulator is a port of [Snes9x](https://github.com/snes9xgit/snes9x/).
 - PNG support is provided by [luPng](https://github.com/jansol/LuPng) and miniz.
 - PCE cover art is from Christian_Haitian.
+- DS3231M libraries originally from [ESP-IDF lib](https://github.com/UncleRus/esp-idf-lib).
+- DS3231M retro-go integration by [micro](https://forum.odroid.com/memberlist.php?mode=viewprofile&u=40859) ([Ben Ropple](https://github.com/bropple)).
 
 
 # License
@@ -169,3 +233,4 @@ Everything in this project is licensed under the [GPLv2 license](COPYING) with t
 - components/lupng (PNG library, MIT)
 - components/retro-go (Retro-Go's framework, MIT)
 - handy-go/components/handy (Lynx emulator, BSD)
+- components/rg_ds3231.c, rg_ds3231.h, rg_i2cdev.c, rg_i2cdev.h (DS3231M hardware RTC libraries, MIT)
