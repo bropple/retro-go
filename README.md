@@ -113,7 +113,8 @@ The main benefit of the RTC add-on is the ability to synchronize the time with s
 | Pokemon Silver | GB /GBC |
 | Pokemon Crystal | GBC |
 | Pokemon Prism | GBC (ROM hack) |
-More titles may be added in the future.
+
+Additional titles may be added in the future.
 
 Most ROM hacks of supported games will work fine, since most of them share the same `rom.name` as the original. Pokemon Prism's timekeeping is more complicated than the original games, but is also fully supported by retro-go as a special case.
 
@@ -151,6 +152,8 @@ RTC-Specific parameters are found in the options menu, in the `More...` submenu.
 | Use HW RTC | Enables or disables HW RTC, only affects GNUboy |
 | Auto HW RTC Sync | Periodically sync in-game time with HW RTC during gameplay (No slowdown) |
 | Sync HW RTC Now | Sync in-game time with HW RTC immediately |
+
+Note that `Use HW RTC` must be enabled in this menu for HW RTC synchronization to work in games!
 
 When `Use HW RTC` is enabled, you cannot manually change GNUboy's clock. If you wish to change the in-game time temporarily, you can disable this setting and then manually change the clock by exiting and re-entering the `More...` submenu. RTC synchronization can be resumed by re-enabling `Use HW RTC`.
 
