@@ -110,7 +110,7 @@ The main benefit of the RTC add-on is the ability to synchronize the time with s
 | Game | System |
 | ---- | ------ |
 | Pokemon Gold | GB / GBC |
-| Pokemon Silver | GB /GBC |
+| Pokemon Silver | GB / GBC |
 | Pokemon Crystal | GBC |
 | Pokemon Prism | GBC (ROM hack) |
 
