@@ -192,6 +192,14 @@ static dialog_return_t rtc_dst_cb(dialog_option_t *option, dialog_event_t event)
     if (event == RG_DIALOG_PREV || event == RG_DIALOG_NEXT) {
         gui.rtc_dst = gui.rtc_dst ? 0 : 1;
         rg_settings_set_int32(SETTING_RTC_DST, gui.rtc_dst);
+        
+        if(gui.rtc_dst) 
+        {
+            rg_rtc_handleDST(RTCtimeBuf);
+            RTCtimeBuf.tm_year -= 1900;
+            struct timeval tv = {mktime(&RTCtimeBuf), 0};
+            settimeofday(&tv, NULL);
+        }
     }
     strcpy(option->value, gui.rtc_dst ? "On" : "Off");
     return RG_DIALOG_ENTER;
@@ -251,15 +259,16 @@ static dialog_return_t rtc_t_set_cb(dialog_option_t *option, dialog_event_t even
             //use RTCtimeBuf struct to update RTC time
             if(app->dev.enabled)
             {
+                rg_settings_set_int32(SETTING_RTC_DST, dst);
+                gui.rtc_dst = dst;
+                
                 if(dst)
                 {
                     //if its DST we need to subtract an hour now because the software
                     //normally takes care of this elsewhere.
-                    if(RTCtimeBuf.tm_hour == 0) RTCtimeBuf.tm_hour = 23;
-                    else RTCtimeBuf.tm_hour--;
+                    rg_rtc_handleDST(RTCtimeBuf);
                 }
-                rg_settings_set_int32(SETTING_RTC_DST, dst);
-                gui.rtc_dst = dst;
+                
                 //ds3231_set_time(&(app->dev), &RTCtimeBuf);
                 RTCtimeBuf.tm_year -= 1900;
                 struct timeval tv = {mktime(&RTCtimeBuf), 0};

@@ -223,6 +223,9 @@ void rg_system_rtc_load(i2c_dev_t dev)
         timeinfo.tm_wday++;
         timeinfo.tm_year -= 1900;
         
+        if(rg_settings_get_int32(SETTING_RTC_DST, 0) == 1) timeinfo.tm_isdst = 1;
+        else timeinfo.tm_isdst = 0;
+        
         struct timeval tv = {mktime(&timeinfo), 0};
         settimeofday(&tv, NULL);
         
@@ -248,6 +251,9 @@ void rg_system_rtc_save(i2c_dev_t dev)
         
         timeinfo->tm_wday--;
         timeinfo->tm_year += 1900;
+        
+        if(rg_settings_get_int32(SETTING_RTC_DST, 0) == 1) timeinfo->tm_isdst = 1;
+        else timeinfo->tm_isdst = 0;
         
         ds3231_set_time(&dev, timeinfo);
         //rg_rtc_debug(rg_rtc_getTime(dev));
@@ -813,7 +819,7 @@ i2c_dev_t rg_rtc_init(void)
             rg_gui_alert("DS3231M", "RTC initialization failed!\n Check your HW installation.\n Re-enable in settings.");
             dev.enabled = false;
             dev.errored = true;
-            rg_settings_set_int32("RTCstate", 0);
+            rg_settings_set_int32(SETTING_RTC_ENABLE, 0);
         }
         else
         {
@@ -839,7 +845,7 @@ struct tm rg_rtc_getTime(i2c_dev_t dev)
             rg_gui_alert("DS3231M",  "ERROR: Failed to get time!\n Check your HW installation.\n Re-enable in settings.");
             dev.enabled = false;
             dev.errored = true;
-            rg_settings_set_int32("RTCstate", 0);
+            rg_settings_set_int32(SETTING_RTC_ENABLE, 0);
         }
     }
     return time;
@@ -863,7 +869,9 @@ struct tm rg_rtc_handleDST(struct tm timeinfo)
 {
             //adding an hour at midnight, the end of month, or end of year can cause problems
             //so fixing it here
-    
+        if(rg_settings_get_int32(SETTING_RTC_DST, 0) == 1)
+        {
+            timeinfo.tm_isdst = 1;
             uint8_t daysInMonth[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
             if(isLeapYear(timeinfo.tm_year))
             {
@@ -892,8 +900,9 @@ struct tm rg_rtc_handleDST(struct tm timeinfo)
                 timeinfo.tm_yday++;
             }
             else timeinfo.tm_hour++;
-            
-            return timeinfo;
+        }
+        else timeinfo.tm_isdst = 0;
+        return timeinfo;
 }
 
 void rg_rtc_debug(struct tm rtcinfo)

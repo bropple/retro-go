@@ -1047,12 +1047,12 @@ void rg_gui_draw_time(struct tm time, int format, bool monthText, bool hourPref,
         y_pos = 0;
     }
 
-    if (rg_settings_get_int32(SETTING_RTC_DST, 0) == 1) //if DST mode is toggled add an hour
-    {
-        //if(time.tm_hour == 23) time.tm_hour = 0;
-        //else time.tm_hour++;
-        time = rg_rtc_handleDST(time);
-    }
+    //if (rg_settings_get_int32(SETTING_RTC_DST, 0) == 1) //if DST mode is toggled add an hour
+    //{
+    //    //if(time.tm_hour == 23) time.tm_hour = 0;
+    //    //else time.tm_hour++;
+    //    time = rg_rtc_handleDST(time);
+    //}
     
    //font_info_t info = rg_gui_get_font_info(); //need font info for more proper spacing
 
