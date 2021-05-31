@@ -32,11 +32,12 @@
 #define INPUT_TIMEOUT 5000000
 #endif
 
-#define SETTING_ROM_FILE_PATH "RomFilePath"
-#define SETTING_START_ACTION  "StartAction"
-#define SETTING_STARTUP_APP   "StartupApp"
-#define SETTING_RTC_ENABLE    "RTCenable"
-#define SETTING_RTC_DST       "RTCdst"
+static const char *SETTING_ROM_FILE_PATH = "RomFilePath";
+static const char *SETTING_START_ACTION  = "StartAction";
+static const char *SETTING_STARTUP_APP   = "StartupApp";
+static const char *SETTING_RTC_ENABLE    = "RTCenable";
+static const char *SETTING_RTC_DST       = "RTCdst";
+static const char *SETTING_RTC_HANDLED   = "RTChandled";
 
 
 typedef struct
@@ -223,16 +224,18 @@ void rg_system_rtc_load(i2c_dev_t dev)
         timeinfo.tm_wday++;
         timeinfo.tm_year -= 1900;
         
-        if(rg_settings_get_int32(SETTING_RTC_DST, 0) == 1) timeinfo.tm_isdst = 1;
-        else timeinfo.tm_isdst = 0;
+        if(rg_settings_get_int32(SETTING_RTC_DST, 0) == 1) 
+        {
+            timeinfo = rg_rtc_handleDST(timeinfo);
+        }
         
-        struct timeval tv = {mktime(&timeinfo), 0};
-        settimeofday(&tv, NULL);
+        rg_system_rtc_update(timeinfo);
         
         time_t now = time(NULL);
         
         RG_LOGI("System time synced from external RTC. Value: %li\n", now);
         RG_LOGI("Local Time: %s\n", asctime(localtime(&now)));
+        RG_LOGI("DST: %d\n", rg_settings_get_int32(SETTING_RTC_DST, 0));
 
     }
     else RG_LOGI("External RTC disabled. System time not synced.\n");
@@ -262,6 +265,14 @@ void rg_system_rtc_save(i2c_dev_t dev)
         
     }
     else RG_LOGI("External RTC disabled. System time not saved to external RTC.\n");
+}
+
+void rg_system_rtc_update(struct tm timeinfo)
+{
+    //Update system time from struct tm timeinfo
+    
+    struct timeval tv = {mktime(&timeinfo), 0};
+    settimeofday(&tv, NULL);
 }
 
 rg_app_desc_t *rg_system_init(int sampleRate, const rg_emu_proc_t *handlers)
@@ -867,16 +878,24 @@ char * rg_rtc_getDay_text(int wday)
 
 struct tm rg_rtc_handleDST(struct tm timeinfo)
 {
-            //adding an hour at midnight, the end of month, or end of year can cause problems
-            //so fixing it here
-        if(rg_settings_get_int32(SETTING_RTC_DST, 0) == 1)
+        //adding an hour at midnight, the end of month, or end of year can cause problems
+        //same for subtracting an hour at midnight, the start of the month, or start of a year
+        //so fixing it here
+    
+        //will only execute if RTC hasn't been handled yet -> prevents adding an hour every time system boots
+    
+        uint8_t daysInMonth[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+        bool leapYear = false;
+        
+        if(isLeapYear(timeinfo.tm_year))
+        {
+            leapYear = true;
+            daysInMonth[1] = 29; //Leap Year, Feb has 29 days instead of 28
+        }
+        
+        if((rg_settings_get_int32(SETTING_RTC_DST, 0) == 1) && rg_settings_get_int32(SETTING_RTC_HANDLED, 0) == 0)
         {
             timeinfo.tm_isdst = 1;
-            uint8_t daysInMonth[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
-            if(isLeapYear(timeinfo.tm_year))
-            {
-                daysInMonth[1] = 29; //Leap Year, Feb has 29 days instead of 28
-            }
             if(timeinfo.tm_hour == 23) 
             {
                 timeinfo.tm_wday == 6 ? timeinfo.tm_wday = 0 : timeinfo.tm_wday++;
@@ -901,7 +920,35 @@ struct tm rg_rtc_handleDST(struct tm timeinfo)
             }
             else timeinfo.tm_hour++;
         }
-        else timeinfo.tm_isdst = 0;
+        else if((rg_settings_get_int32(SETTING_RTC_DST, 0) == 0) && rg_settings_get_int32(SETTING_RTC_HANDLED, 0) == 0)
+        {
+            timeinfo.tm_isdst = 0;
+            if(timeinfo.tm_hour == 0) 
+            {
+                timeinfo.tm_wday == 0 ? timeinfo.tm_wday = 6 : timeinfo.tm_wday--;
+                if(timeinfo.tm_mday == daysInMonth[timeinfo.tm_mon])
+                {
+                    if(timeinfo.tm_mon == 0)
+                    {
+                        timeinfo.tm_mon = 11;
+                        timeinfo.tm_mday = daysInMonth[timeinfo.tm_mon];
+                        timeinfo.tm_year--;
+                        if(leapYear) timeinfo.tm_yday = 365;
+                        else timeinfo.tm_yday = 364;
+                    }
+                    else timeinfo.tm_mon--;
+                    timeinfo.tm_mday = daysInMonth[timeinfo.tm_mon];
+                }
+                else 
+                {
+                    timeinfo.tm_mday--;
+                }
+                timeinfo.tm_hour = 23;
+                timeinfo.tm_yday--;
+            }
+            else timeinfo.tm_hour--;
+        }
+        rg_settings_set_int32(SETTING_RTC_HANDLED, 1); //RTC has been handled.
         return timeinfo;
 }
 

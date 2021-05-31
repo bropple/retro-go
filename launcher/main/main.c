@@ -21,8 +21,9 @@ static const char *SETTING_RTC_FORMAT    = "RTCformat";
 static const char *SETTING_RTC_MONTH_TXT = "RTCmonthText";
 static const char *SETTING_RTC_HOUR_PREF = "RTChourPref";
 static const char *SETTING_RTC_DST       = "RTCdst";
+static const char *SETTING_RTC_HANDLED   = "RTChandled";
 
-struct tm RTCtimeBuf = { 0 }; //time buffer for use in RTC settings
+struct tm RTCtimeBuf = { 0 }; //time buffer
 bool dst = false;
 static rg_app_desc_t *app; //contains external RTC device descriptor (app->dev)
 
@@ -31,13 +32,13 @@ static dialog_return_t font_type_cb(dialog_option_t *option, dialog_event_t even
     font_info_t info = rg_gui_get_font_info();
 
     if (event == RG_DIALOG_PREV) {
-        rg_gui_set_font_type((int)info.type - 1);
+        rg_gui_set_font_type(((int)info.type - 1), true);
         info = rg_gui_get_font_info();
         gui_redraw();
     }
     if (event == RG_DIALOG_NEXT) {
-        if (!rg_gui_set_font_type((int)info.type + 1))
-            rg_gui_set_font_type(0);
+        if (!rg_gui_set_font_type(((int)info.type + 1), true))
+            rg_gui_set_font_type(0, true);
         info = rg_gui_get_font_info();
         gui_redraw();
     }
@@ -193,13 +194,10 @@ static dialog_return_t rtc_dst_cb(dialog_option_t *option, dialog_event_t event)
         gui.rtc_dst = gui.rtc_dst ? 0 : 1;
         rg_settings_set_int32(SETTING_RTC_DST, gui.rtc_dst);
         
-        if(gui.rtc_dst) 
-        {
-            rg_rtc_handleDST(RTCtimeBuf);
-            RTCtimeBuf.tm_year -= 1900;
-            struct timeval tv = {mktime(&RTCtimeBuf), 0};
-            settimeofday(&tv, NULL);
-        }
+        rg_settings_set_int32(SETTING_RTC_HANDLED, 0);
+        RTCtimeBuf = rg_rtc_handleDST(RTCtimeBuf);
+        RTCtimeBuf.tm_year -= 1900;
+        rg_system_rtc_update(RTCtimeBuf);
     }
     strcpy(option->value, gui.rtc_dst ? "On" : "Off");
     return RG_DIALOG_ENTER;
@@ -264,15 +262,12 @@ static dialog_return_t rtc_t_set_cb(dialog_option_t *option, dialog_event_t even
                 
                 if(dst)
                 {
-                    //if its DST we need to subtract an hour now because the software
-                    //normally takes care of this elsewhere.
-                    rg_rtc_handleDST(RTCtimeBuf);
+                    rg_settings_set_int32(SETTING_RTC_HANDLED, 1);
+                    RTCtimeBuf.tm_isdst = dst;
                 }
                 
-                //ds3231_set_time(&(app->dev), &RTCtimeBuf);
                 RTCtimeBuf.tm_year -= 1900;
-                struct timeval tv = {mktime(&RTCtimeBuf), 0};
-                settimeofday(&tv, NULL);
+                rg_system_rtc_update(RTCtimeBuf);
                 return RG_DIALOG_SELECT;
             }
             else rg_gui_alert("DS3231M",  "Unable to update HW RTC time!");

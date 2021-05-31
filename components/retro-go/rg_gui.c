@@ -26,14 +26,13 @@ static const dialog_theme_t default_theme = {
 static dialog_theme_t theme;
 static font_info_t font_info = {0, 8, 8, 8, &font_basic8x8};
 
-// static const char *SETTING_FONTSIZE     = "FontSize";
-static const char *SETTING_FONTTYPE     = "FontType";
-static const char *SETTING_RTC_DST      = "RTCdst";
+#define SETTING_FONTTYPE      "FontType"
+#define SETTING_RTC_DST       "RTCdst"
 
 void rg_gui_init(void)
 {
     overlay_buffer = (uint16_t *)rg_alloc(RG_SCREEN_WIDTH * 32 * 2, MEM_SLOW);
-    rg_gui_set_font_type(rg_settings_get_int32(SETTING_FONTTYPE, 0));
+    rg_gui_set_font_type(rg_settings_get_int32(SETTING_FONTTYPE, 0), true);
     rg_gui_set_theme(&default_theme);
 }
 
@@ -120,7 +119,7 @@ static rg_glyph_t get_glyph(const rg_font_t *font, int points, int c)
     return out;
 }
 
-bool rg_gui_set_font_type(int type)
+bool rg_gui_set_font_type(int type, bool dmesg)
 {
     if (type < 0)
         type += fonts_count;
@@ -136,10 +135,12 @@ bool rg_gui_set_font_type(int type)
 
     rg_settings_set_int32(SETTING_FONTTYPE, font_info.type);
 
-    RG_LOGI("Font set to: points=%d, size=%dx%d, scaling=%.2f\n",
+    if(dmesg) 
+    {
+        RG_LOGI("Font set to: points=%d, size=%dx%d, scaling=%.2f\n",
         font_info.points, font_info.width, font_info.height,
         (float)font_info.points / font_info.font->height);
-
+    }
     return true;
 }
 
@@ -1119,24 +1120,15 @@ void rg_gui_draw_time(struct tm time, int format, bool monthText, bool hourPref,
         free(time_temp);
     }
     
-    //dynamic text width
-    //this could get messy with a lot of fonts
-    //time_width = strlen(time_buff) * info.width;
-    //ampm_pos = time_width + (8*info.width);
-    //day_pos = ampm_pos + (4*info.width);
-    
+    //draw using only basic 8 font
     int f = rg_gui_get_font_info().type;
-    rg_gui_set_font_type(0);
+    rg_gui_set_font_type(0, false);
 
     rg_gui_draw_text(x_pos, y_pos, time_width, time_buff, C_WHITE, C_BLACK, 0);                  //draw the time
     if(ampm < 2) rg_gui_draw_text(ampm_pos, y_pos, 16, ampm_text[ampm], C_WHITE, C_BLACK, 0);    //draw am/pm indicator if it's enabled
     rg_gui_draw_text(day_pos, y_pos, 24, rg_rtc_getDay_text(time.tm_wday), C_WHITE, C_BLACK, 0); //draw the day next to the battery
-    
-    //RG_LOGI("Printed time is %s.\n", time_buff);
-    //RG_LOGI("Printed day is %s.\n", rg_rtc_getDay_text(time.tm_wday));
-    //RG_LOGI("Wday value us %d.\n", time.tm_wday);
-    
-    rg_gui_set_font_type(f);
+        
+    rg_gui_set_font_type(f, false);
     
     free(time_buff);
 }
