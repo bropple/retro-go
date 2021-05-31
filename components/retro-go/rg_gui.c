@@ -26,8 +26,8 @@ static const dialog_theme_t default_theme = {
 static dialog_theme_t theme;
 static font_info_t font_info = {0, 8, 8, 8, &font_basic8x8};
 
-#define SETTING_FONTTYPE      "FontType"
-#define SETTING_RTC_DST       "RTCdst"
+static const char *SETTING_FONTTYPE      = "FontType";
+static const char *SETTING_RTC_DST       = "RTCdst";
 
 void rg_gui_init(void)
 {
