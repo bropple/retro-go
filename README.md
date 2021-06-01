@@ -105,7 +105,7 @@ You can find installation instructions for the RTC chip on this [ODROID-GO forum
 
 When retro-go is installed without the RTC add-on, you will be notified on the first boot. If you aren't planning on installing the add-on, you will only see this notification once. If you install it at a later time, it must be manually enabled in the HW RTC settings from the launcher's settings menu.
 
-The main benefit of the RTC add-on is the ability to synchronize the time with supported Game Boy / Game Boy Color titles. A list of titles compatible with retro-go are listed below:
+The main benefit of the RTC add-on is the ability to synchronize the time with supported Game Boy / Game Boy Color titles. A list of RTC-enabled titles compatible with retro-go are listed below:
 
 | Game | System |
 | ---- | ------ |
@@ -116,7 +116,7 @@ The main benefit of the RTC add-on is the ability to synchronize the time with s
 
 Additional titles may be added in the future.
 
-Most ROM hacks of supported games will work fine, since most of them share the same `rom.name` as the original. Pokemon Prism's timekeeping is more complicated than the original games, but is also fully supported by retro-go as a special case.
+Most ROM hacks of supported games will work fine, since most of them share the same `rom.name` as the original. Pokemon Prism, however, has a unique `rom.name` and has more advanced timekeeping than the original game it's based on, but is also fully supported by retro-go as a special case.
 
 ## Setting the time
 After installing the hardware, the displayed time is bound to be incorrect. The time can be set from the launcher's settings menu:
