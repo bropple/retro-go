@@ -229,6 +229,10 @@ void rg_system_rtc_load(i2c_dev_t dev)
             timeinfo = rg_rtc_handleDST(timeinfo);
         }
         
+        //TODO: Time is 9 seconds less than it should be after loading, maybe there's an underlying cause?
+        if(timeinfo.tm_sec < 53) timeinfo.tm_sec += 7;
+        else timeinfo.tm_sec += 7 - (60 - timeinfo.tm_sec);
+        
         rg_system_rtc_update(timeinfo);
         
         time_t now = time(NULL);
@@ -255,11 +259,7 @@ void rg_system_rtc_save(i2c_dev_t dev)
         timeinfo->tm_wday--;
         timeinfo->tm_year += 1900;
         
-        if(rg_settings_get_int32(SETTING_RTC_DST, 0) == 1) timeinfo->tm_isdst = 1;
-        else timeinfo->tm_isdst = 0;
-        
         ds3231_set_time(&dev, timeinfo);
-        //rg_rtc_debug(rg_rtc_getTime(dev));
         
         RG_LOGI("Updated system time and saved to external RTC.\n");
         
@@ -819,6 +819,7 @@ i2c_dev_t rg_rtc_init(void)
 {
     //this will initialize the DS3231M RTC every time the launcher is started.
     //Error message only pops up if there's a problem with initializing the RTC.
+    //Error message pops up once and will not return unless settings are re-enabled.
 
     i2c_dev_t dev;
     if(rg_settings_get_int32(SETTING_RTC_ENABLE, 0) == 1)

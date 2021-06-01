@@ -267,7 +267,9 @@ static dialog_return_t rtc_t_set_cb(dialog_option_t *option, dialog_event_t even
                 }
                 
                 RTCtimeBuf.tm_year -= 1900;
+                
                 rg_system_rtc_update(RTCtimeBuf);
+                
                 return RG_DIALOG_SELECT;
             }
             else rg_gui_alert("DS3231M",  "Unable to update HW RTC time!");
