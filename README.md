@@ -124,7 +124,7 @@ After installing the hardware, the displayed time is bound to be incorrect. The 
 ```
 HW RTC Settings -> Date/Time Settings -> Set Date & Time
 ```
-In this submenu, you will enter the requested time parameters, including whether or not Daylight Saving Time is in effect (if your country doesn't use DST, this can safely be ignored). The suggested way to do this is to fill in the current time and set the seconds to a future time, and press `Save Changes` about a half-second before the desired time. After following this procedure, the time should now be set. It can be changed again at any time.
+In this submenu, you will enter the requested time parameters, including whether or not Daylight Saving Time is in effect (if your country doesn't use DST, this can safely be ignored). The suggested way to do this is to fill in the current time and set the seconds a bit ahead of the actual time, and press `Save Changes` a second or so before the time rolls over to that value. After following this procedure, the time should now be set and be accurate. It can be changed again at any time.
 
 ## Launcher
 There are time-related parameters exclusive to the launcher. Each parameter and its function is discussed in the following section.
