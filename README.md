@@ -228,7 +228,7 @@ I don't want to maintain non-ESP32 ports in this repository but let me know if I
 - PNG support is provided by [luPng](https://github.com/jansol/LuPng) and miniz.
 - PCE cover art is from Christian_Haitian.
 - DS3231M libraries originally from [ESP-IDF lib](https://github.com/UncleRus/esp-idf-lib).
-- DS3231M retro-go integration by [micro](https://forum.odroid.com/memberlist.php?mode=viewprofile&u=40859) ([Ben Ropple](https://github.com/bropple)).
+- DS3231M retro-go integration by [Ben Ropple](https://github.com/bropple) ([micro](https://forum.odroid.com/memberlist.php?mode=viewprofile&u=40859)).
 
 
 # License

@@ -27,7 +27,10 @@ static dialog_theme_t theme;
 static font_info_t font_info = {0, 8, 8, 8, &font_basic8x8};
 
 static const char *SETTING_FONTTYPE      = "FontType";
-static const char *SETTING_RTC_DST       = "RTCdst";
+static const char *SETTING_RTC_ENABLE    = "RTCenable";
+static const char *SETTING_RTC_FORMAT    = "RTCformat";
+static const char *SETTING_RTC_MONTH_TXT = "RTCmonthText";
+static const char *SETTING_RTC_HOUR_PREF = "RTChourPref";
 
 void rg_gui_init(void)
 {
@@ -895,6 +898,16 @@ int rg_gui_game_settings_menu(const dialog_option_t *extra_options)
     rg_audio_set_mute(true);
     rg_input_wait_for_key(GAMEPAD_KEY_ALL, false);
     draw_game_status_bar(stats);
+    
+    //draw system time if RTC is present
+    if(rg_settings_get_int32(SETTING_RTC_ENABLE, 0) == 1)
+    {
+        time_t now = time(NULL);
+        struct tm *timeInfo = localtime(&now);
+        timeInfo->tm_year += 1900;
+        
+        rg_gui_draw_time(*timeInfo, rg_settings_get_int32(SETTING_RTC_FORMAT, 0), rg_settings_get_int32(SETTING_RTC_MONTH_TXT, 0), rg_settings_get_int32(SETTING_RTC_HOUR_PREF, 0), false);
+    }
 
     int r = rg_gui_settings_menu(options);
 
@@ -986,6 +999,16 @@ int rg_gui_game_menu(void)
     rg_audio_set_mute(true);
     rg_input_wait_for_key(GAMEPAD_KEY_ALL, false);
     draw_game_status_bar(stats);
+    
+    //draw system time if RTC is present
+    if(rg_settings_get_int32(SETTING_RTC_ENABLE, 0) == 1)
+    {
+        time_t now = time(NULL);
+        struct tm *timeInfo = localtime(&now);
+        timeInfo->tm_year += 1900;
+
+        rg_gui_draw_time(*timeInfo, rg_settings_get_int32(SETTING_RTC_FORMAT, 0), rg_settings_get_int32(SETTING_RTC_MONTH_TXT, 0), rg_settings_get_int32(SETTING_RTC_HOUR_PREF, 0), false);
+    }
 
     int r = rg_gui_dialog("Retro-Go", choices, 0);
 
@@ -1022,10 +1045,10 @@ void rg_gui_draw_time(struct tm time, int format, bool monthText, bool hourPref,
 
     //hourPref:  false = 12h - use 12 hour clock
     //           true = 24h - use 24 hour clock
-
-    //TODO: Change text placement depending on font size and type.
     
-    //standard position of the drawn time
+    //TODO: Make unique format for menu time
+        
+    font_info_t fontInfo = rg_gui_get_font_info(); //need font info for more proper spacing
     
     char *time_buff = malloc(72);
     char * ampm_text[2] = {"AM", "PM"};
@@ -1038,14 +1061,16 @@ void rg_gui_draw_time(struct tm time, int format, bool monthText, bool hourPref,
     
     if(isMainMenu)
     {
+        //standard position of the drawn time
         x_pos = 58;
         y_pos = 0;
     }
     else
     {
-        //TODO: change the position for game pause menus
-        x_pos = 58;
-        y_pos = 0;
+        x_pos = 0;
+        y_pos = (fontInfo.height + 1);
+        ampm_pos = 172;
+        day_pos = 202;
     }
 
     //if (rg_settings_get_int32(SETTING_RTC_DST, 0) == 1) //if DST mode is toggled add an hour
@@ -1054,8 +1079,6 @@ void rg_gui_draw_time(struct tm time, int format, bool monthText, bool hourPref,
     //    //else time.tm_hour++;
     //    time = rg_rtc_handleDST(time);
     //}
-    
-   //font_info_t info = rg_gui_get_font_info(); //need font info for more proper spacing
 
     if (!hourPref)
     {
