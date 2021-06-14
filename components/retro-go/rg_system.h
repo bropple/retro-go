@@ -17,6 +17,7 @@ extern "C" {
 #include "rg_input.h"
 #include "rg_netplay.h"
 #include "rg_vfs.h"
+#include "rg_image.h"
 #include "rg_gui.h"
 #include "rg_profiler.h"
 #include "rg_settings.h"
@@ -24,6 +25,7 @@ extern "C" {
 //DS3231M Includes, requires I2C
 #include "rg_ds3231.h"
 #include "rg_i2cdev.h"
+#include "rg_cheats.h"
 
 typedef enum
 {
@@ -66,20 +68,42 @@ typedef enum
     SPI_LOCK_OTHER = 3,
 } spi_lock_res_t;
 
-typedef bool (*state_handler_t)(const char *filename);
-typedef bool (*reset_handler_t)(bool hard);
-typedef bool (*message_handler_t)(int msg, void *arg);
-typedef bool (*screenshot_handler_t)(const char *filename, int width, int height);
+enum {
+    RG_LOG_PRINT = 0,
+    RG_LOG_ERROR,
+    RG_LOG_WARN,
+    RG_LOG_INFO,
+    RG_LOG_DEBUG,
+};
+
+#define RG_STRUCT_MAGIC 0x12345678
+
+typedef bool (*rg_state_handler_t)(const char *filename);
+typedef bool (*rg_reset_handler_t)(bool hard);
+typedef bool (*rg_message_handler_t)(int msg, void *arg);
+typedef bool (*rg_screenshot_handler_t)(const char *filename, int width, int height);
+typedef int  (*rg_mem_read_handler_t)(int addr);
+typedef bool (*rg_mem_write_handler_t)(int addr, int value);
 
 typedef struct
 {
-    state_handler_t loadState;
-    state_handler_t saveState;
-    reset_handler_t reset;
-    message_handler_t message;
-    netplay_handler_t netplay;
-    screenshot_handler_t screenshot;
+    rg_state_handler_t loadState;
+    rg_state_handler_t saveState;
+    rg_reset_handler_t reset;
+    rg_message_handler_t message;
+    rg_netplay_handler_t netplay;
+    rg_screenshot_handler_t screenshot;
+    rg_mem_read_handler_t memRead;    // Used by for cheats and debugging
+    rg_mem_write_handler_t memWrite;  // Used by for cheats and debugging
 } rg_emu_proc_t;
+
+// TO DO: Make it an abstract ring buffer implementation?
+#define LOG_BUFFER_SIZE 2048
+typedef struct
+{
+    char buffer[LOG_BUFFER_SIZE];
+    size_t cursor;
+} log_buffer_t;
 
 typedef struct
 {
@@ -87,14 +111,18 @@ typedef struct
     const char *version;
     const char *buildDate;
     const char *buildTime;
+    const char *buildUser;
     int speedupEnabled;
     int refreshRate;
     int sampleRate;
     int startAction;
+    int logLevel;
+    int isLauncher;
     const char *romPath;
     void *mainTaskHandle;
     rg_emu_proc_t handlers;
     i2c_dev_t dev;   //I2C struct for the DS3231M RTC
+    log_buffer_t log;
 } rg_app_desc_t;
 
 typedef struct
@@ -119,7 +147,6 @@ typedef struct
     uint32_t freeBlockInt;
     uint32_t freeBlockExt;
     uint32_t freeStackMain;
-    uint32_t magicWord;
 } runtime_stats_t;
 
 rg_app_desc_t *rg_system_init(int sampleRate, const rg_emu_proc_t *handlers);
@@ -133,6 +160,8 @@ bool rg_system_find_app(const char *app);
 void rg_system_set_led(int value);
 int  rg_system_get_led(void);
 void rg_system_tick(bool skippedFrame, bool fullFrame, int busyTime);
+void rg_system_log(int level, const char *context, const char *format, ...);
+void rg_system_write_log(log_buffer_t *log, FILE *fp);
 rg_app_desc_t *rg_system_get_app();
 runtime_stats_t rg_system_get_stats();
 
@@ -155,7 +184,6 @@ void rg_spi_lock_acquire(spi_lock_res_t);
 void rg_spi_lock_release(spi_lock_res_t);
 
 void *rg_alloc(size_t size, uint32_t caps);
-void rg_free(void *ptr);
 
 //DS3231M functions
 i2c_dev_t rg_rtc_init(void);
@@ -190,14 +218,13 @@ extern uint32_t crc32_le(uint32_t crc, const uint8_t * buf, uint32_t len);
 
 // This should really support printf format...
 #define RG_PANIC(x) rg_system_panic(x, __FUNCTION__)
-#define RG_ASSERT(cond, x) while (!(cond)) { RG_PANIC(x); }
+#define RG_ASSERT(cond, msg) while (!(cond)) { RG_PANIC("Assertion failed: `" #cond "` : " msg); }
 
-#define RG_LOGX(x, ...) printf(x, ## __VA_ARGS__)
-#define RG_LOGE(x, ...) printf("!! %s: " x, __func__, ## __VA_ARGS__)
-#define RG_LOGW(x, ...) printf(" ! %s: " x, __func__, ## __VA_ARGS__)
-#define RG_LOGI(x, ...) printf("%s: " x, __func__, ## __VA_ARGS__)
-//#define RG_LOGD(x, ...) printf("> %s: " x, __func__, ## __VA_ARGS__)
-#define RG_LOGD(x, ...) {}
+#define RG_LOGX(x, ...) rg_system_log(RG_LOG_PRINT, __func__, x, ## __VA_ARGS__)
+#define RG_LOGE(x, ...) rg_system_log(RG_LOG_ERROR, __func__, x, ## __VA_ARGS__)
+#define RG_LOGW(x, ...) rg_system_log(RG_LOG_WARN, __func__, x, ## __VA_ARGS__)
+#define RG_LOGI(x, ...) rg_system_log(RG_LOG_INFO, __func__, x, ## __VA_ARGS__)
+#define RG_LOGD(x, ...) rg_system_log(RG_LOG_DEBUG, __func__, x, ## __VA_ARGS__)
 
 #define RG_DUMP(...) {}
 

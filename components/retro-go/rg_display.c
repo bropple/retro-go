@@ -7,7 +7,6 @@
 #include <driver/rtc_io.h>
 #include <string.h>
 #include <unistd.h>
-#include <lupng.h>
 
 #include "rg_system.h"
 #include "rg_display.h"
@@ -88,7 +87,7 @@ static inline void spi_queue_transaction(const void *data, size_t length, uint32
 {
     spi_transaction_t *t;
 
-    if (length < 1)
+    if (!data || length < 1)
         return;
 
     xQueueReceive(spi_queue, &t, portMAX_DELAY);
@@ -704,7 +703,7 @@ static void update_viewport_size(int src_width, int src_height, double new_ratio
 
         if (new_width > SCREEN_WIDTH)
         {
-            RG_LOGX("[LCD SCALE] new_width too large: %d, reducing new_height to maintain ratio.\n", new_width);
+            RG_LOGW("new_width too large: %d, reducing new_height to maintain ratio.\n", new_width);
             new_height = SCREEN_HEIGHT * (SCREEN_WIDTH / (double)new_width);
             new_width = SCREEN_WIDTH;
         }
@@ -727,7 +726,7 @@ static void update_viewport_size(int src_width, int src_height, double new_ratio
 
     generate_filter_structures(src_width, src_height);
 
-    RG_LOGX("[LCD SCALE] %dx%d@%.3f => %dx%d@%.3f x_inc:%d y_inc:%d x_scale:%.3f y_scale:%.3f x_origin:%d y_origin:%d\n",
+    RG_LOGI("%dx%d@%.3f => %dx%d@%.3f x_inc:%d y_inc:%d x_scale:%.3f y_scale:%.3f x_origin:%d y_origin:%d\n",
            src_width, src_height, src_width/(double)src_height, new_width, new_height, new_ratio,
            x_inc, y_inc, x_scale, y_scale, display.viewport.x, display.viewport.y);
 }
@@ -871,14 +870,10 @@ bool rg_display_save_frame(const char *filename, rg_video_frame_t *frame, int wi
     RG_LOGI("Saving frame: %dx%d to PNG %dx%d. Step: X=%.3f Y=%.3f\n",
         frame->width, frame->height, width, height, step_x, step_y);
 
-    LuImage *png = luImageCreate(width, height, 3, 8, 0, 0);
-    if (!png)
-    {
-        RG_LOGE("LuImage allocation failed!\n");
-        return false;
-    }
+    rg_image_t *img = rg_image_alloc(width, height);
+    if (!img) return false;
 
-    uint8_t *img_ptr = png->data;
+    uint16_t *img_ptr = img->data;
 
     for (int y = 0; y < height; y++)
     {
@@ -896,22 +891,17 @@ bool rg_display_save_frame(const char *filename, rg_video_frame_t *frame, int wi
             if ((frame->flags & RG_PIXEL_LE) == 0) // BE to LE
                 pixel = (pixel << 8) | (pixel >> 8);
 
-            *(img_ptr++) = ((pixel >> 11) & 0x1F) << 3;
-            *(img_ptr++) = ((pixel >> 5) & 0x3F) << 2;
-            *(img_ptr++) = (pixel & 0x1F) << 3;
+            *(img_ptr++) = pixel;
         }
     }
 
-    bool status = luPngWriteFile(filename, png);
-    luImageRelease(png, 0);
+    bool status = rg_image_save_to_file(filename, img, 0);
+    rg_image_free(img);
 
-    if (status != PNG_OK)
-    {
-        RG_LOGE("luPngWriteFile() failed! %d\n", status);
-        return false;
-    }
+    if (!status)
+        RG_LOGE("rg_image_write_file() failed!\n");
 
-    return true;
+    return status;
 }
 
 IRAM_ATTR
