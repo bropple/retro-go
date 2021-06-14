@@ -8,6 +8,7 @@
 #include <esp_sleep.h>
 #include <driver/gpio.h>
 #include <sys/stat.h>
+#include <stdarg.h>
 #include <assert.h>
 #include <string.h>
 
@@ -23,13 +24,14 @@
 #define USE_SPI_MUTEX 0
 #endif
 
-#define PANIC_TRACE_MAGIC 0x12345678
-#define BLOCK_MAGIC 0x12345678
-
 #ifdef ENABLE_PROFILING
 #define INPUT_TIMEOUT -1
 #else
 #define INPUT_TIMEOUT 5000000
+#endif
+
+#ifndef RG_BUILD_USER
+#define RG_BUILD_USER "ducalex"
 #endif
 
 #define SETTING_ROM_FILE_PATH "RomFilePath"
@@ -39,22 +41,15 @@
 typedef struct
 {
     uint32_t magicWord;
-    char output[2048];
-    size_t cursor;
-} panic_console_t;
-
-typedef struct
-{
-    uint32_t magicWord;
     char message[256];
     char context[128];
-    char appname[128];
+    runtime_stats_t statistics;
+    log_buffer_t log;
 } panic_trace_t;
 
 // These will survive a software reset
 static RTC_NOINIT_ATTR panic_trace_t panicTrace;
-static RTC_NOINIT_ATTR panic_console_t panicConsole;
-static RTC_NOINIT_ATTR runtime_stats_t statistics;
+static runtime_stats_t statistics;
 static runtime_counters_t counters;
 static rg_app_desc_t app;
 static long inputTimeout = -1;
@@ -66,19 +61,31 @@ static spi_lock_res_t spiMutexOwner;
 #endif
 
 
+static inline void logbuf_print(log_buffer_t *buf, const char *str)
+{
+    while (*str)
+    {
+        buf->buffer[buf->cursor++] = *str++;
+        buf->cursor %= LOG_BUFFER_SIZE;
+    }
+    buf->buffer[buf->cursor] = 0;
+}
+
+static inline void begin_panic_trace()
+{
+    panicTrace.magicWord = RG_STRUCT_MAGIC;
+    panicTrace.message[0] = 0;
+    panicTrace.context[0] = 0;
+    panicTrace.statistics = statistics;
+    panicTrace.log = app.log;
+    logbuf_print(&panicTrace.log, "\n\n*** PANIC TRACE: ***\n\n");
+}
+
 IRAM_ATTR void esp_panic_putchar_hook(char c)
 {
-    if (panicConsole.magicWord != PANIC_TRACE_MAGIC)
-    {
-        panicConsole.magicWord = PANIC_TRACE_MAGIC;
-        panicConsole.cursor = 0;
-    }
-
-    if (panicConsole.cursor < sizeof(panicConsole.output) - 1)
-    {
-        panicConsole.output[panicConsole.cursor++] = c;
-        panicConsole.output[panicConsole.cursor] = 0;
-    }
+    if (panicTrace.magicWord != RG_STRUCT_MAGIC)
+        begin_panic_trace();
+    logbuf_print(&panicTrace.log, (char[2]){c, 0});
 }
 
 static void system_monitor_task(void *arg)
@@ -90,8 +97,6 @@ static void system_monitor_task(void *arg)
 
     memset(&statistics, 0, sizeof(statistics));
     memset(&counters, 0, sizeof(counters));
-
-    statistics.magicWord = BLOCK_MAGIC;
 
     // Give the app a few seconds to start before monitoring
     vTaskDelay(pdMS_TO_TICKS(2000));
@@ -132,7 +137,7 @@ static void system_monitor_task(void *arg)
             rg_system_set_led(ledState);
         }
 
-        RG_LOGX("STACK:%d, HEAP:%d+%d (%d+%d), BUSY:%.4f, FPS:%.4f (SKIP:%d, PART:%d, FULL:%d), BATTERY:%d\n",
+        RG_LOGX("STACK:%d, HEAP:%d+%d (%d+%d), BUSY:%.2f, FPS:%.2f (SKIP:%d, PART:%d, FULL:%d), BATT:%d\n",
             statistics.freeStackMain,
             statistics.freeMemoryInt / 1024,
             statistics.freeMemoryExt / 1024,
@@ -147,12 +152,12 @@ static void system_monitor_task(void *arg)
 
         // if (statistics.freeStackMain < 1024)
         // {
-        //     RG_PANIC("Running out of stack space!");
+        //     RG_LOGW("Running out of stack space!");
         // }
 
         // if (RG_MAX(statistics.freeBlockInt, statistics.freeBlockExt) < 8192)
         // {
-        //     RG_PANIC("Running out of heap space!");
+        //     RG_LOGW("Running out of heap space!");
         // }
 
         if (rg_input_gamepad_last_read() > (unsigned long)inputTimeout)
@@ -240,8 +245,11 @@ rg_app_desc_t *rg_system_init(int sampleRate, const rg_emu_proc_t *handlers)
     app.version = esp_app->version;
     app.buildDate = esp_app->date;
     app.buildTime = esp_app->time;
+    app.buildUser = RG_BUILD_USER;
     app.refreshRate = 1;
     app.sampleRate = sampleRate;
+    app.logLevel = RG_LOG_LEVEL;
+    app.isLauncher = (strcmp(app.name, RG_APP_LAUNCHER) == 0);
     app.mainTaskHandle = xTaskGetCurrentTaskHandle();
     if (handlers)
         app.handlers = *handlers;
@@ -265,33 +273,24 @@ rg_app_desc_t *rg_system_init(int sampleRate, const rg_emu_proc_t *handlers)
     {
         char message[400] = "Application crashed";
 
-        if (panicTrace.magicWord == PANIC_TRACE_MAGIC)
+        if (panicTrace.magicWord == RG_STRUCT_MAGIC)
         {
-            RG_LOGX(" *** PANIC TRACE: %s (%s) *** \n", panicTrace.message, panicTrace.context);
-            strcpy(message, panicTrace.message);
-        }
+            if (panicTrace.message[0])
+                strcpy(message, panicTrace.message);
 
-        if (panicConsole.magicWord == PANIC_TRACE_MAGIC)
-        {
             RG_LOGI("Panic log found, saving to sdcard...\n");
             FILE *fp = fopen(RG_BASE_PATH "/crash.log", "w");
             if (fp)
             {
                 fprintf(fp, "Application: %s %s\n", app.name, app.version);
                 fprintf(fp, "Build date: %s %s\n", app.buildDate, app.buildTime);
-                if (statistics.magicWord == BLOCK_MAGIC)
-                {
-                    fprintf(fp, "Free memory: %d + %d\n", statistics.freeMemoryInt, statistics.freeMemoryExt);
-                    fprintf(fp, "Free block: %d + %d\n", statistics.freeBlockInt, statistics.freeBlockExt);
-                    fprintf(fp, "Stack HWM: %d\n", statistics.freeStackMain);
-                }
-                if (panicTrace.magicWord == PANIC_TRACE_MAGIC)
-                {
-                    fprintf(fp, "Message: %.256s\n", panicTrace.message);
-                    fprintf(fp, "Context: %.256s\n", panicTrace.context);
-                }
+                fprintf(fp, "Free memory: %d + %d\n", panicTrace.statistics.freeMemoryInt, panicTrace.statistics.freeMemoryExt);
+                fprintf(fp, "Free block: %d + %d\n", panicTrace.statistics.freeBlockInt, panicTrace.statistics.freeBlockExt);
+                fprintf(fp, "Stack HWM: %d\n", panicTrace.statistics.freeStackMain);
+                fprintf(fp, "Message: %.256s\n", panicTrace.message);
+                fprintf(fp, "Context: %.256s\n", panicTrace.context);
                 fputs("\nConsole:\n", fp);
-                fputs(panicConsole.output, fp);
+                rg_system_write_log(&panicTrace.log, fp);
                 fputs("\n\nEnd of log\n", fp);
                 fclose(fp);
                 strcat(message, "\nLog saved to SD Card.");
@@ -305,11 +304,8 @@ rg_app_desc_t *rg_system_init(int sampleRate, const rg_emu_proc_t *handlers)
         rg_audio_deinit();
         rg_system_switch_app(RG_APP_LAUNCHER);
     }
-    else
-    {
-        panicConsole.magicWord = 0;
-        panicTrace.magicWord = 0;
-    }
+
+    panicTrace.magicWord = 0;
 
     if (!sd_init)
     {
@@ -319,7 +315,7 @@ rg_app_desc_t *rg_system_init(int sampleRate, const rg_emu_proc_t *handlers)
         rg_system_switch_app(RG_APP_LAUNCHER);
     }
 
-    if (strcmp(app.name, RG_APP_LAUNCHER) != 0)
+    if (!app.isLauncher)
     {
         app.startAction = rg_settings_get_int32(SETTING_START_ACTION, 0);
         app.romPath = rg_settings_get_string(SETTING_ROM_FILE_PATH, NULL);
@@ -562,8 +558,7 @@ bool rg_emu_reset(int hard)
 {
     if (app.handlers.reset)
         return app.handlers.reset(hard);
-    return false;
-    // return rg_emu_notify(RG_MSG_RESET, (void*)hard);
+    return rg_emu_notify(RG_MSG_RESET, (void*)hard);
 }
 
 bool rg_emu_notify(int msg, void *arg)
@@ -633,14 +628,50 @@ void rg_system_set_boot_app(const char *app)
 
 void rg_system_panic(const char *message, const char *context)
 {
+    if (panicTrace.magicWord != RG_STRUCT_MAGIC)
+        begin_panic_trace();
+
     strcpy(panicTrace.message, message ? message : "");
     strcpy(panicTrace.context, context ? context : "");
-    panicTrace.magicWord = PANIC_TRACE_MAGIC;
 
     RG_LOGX("*** PANIC  : %s\n", panicTrace.message);
     RG_LOGX("*** CONTEXT: %s\n", panicTrace.context);
 
     abort();
+}
+
+void rg_system_log(int level, const char *context, const char *format, ...)
+{
+    static const char *prefix[] = {"", "error", "warn", "info", "debug"};
+    char buffer[512]; /*static*/
+    size_t len = 0;
+    va_list args;
+
+    if (level > RG_LOG_LEVEL) // app.logLevel
+        return;
+
+    if (level > RG_LOG_DEBUG)
+        len += sprintf(buffer, "[log:%d] %s: ", level, context);
+    else if (level > RG_LOG_PRINT)
+        len += sprintf(buffer, "[%s] %s: ", prefix[level], context);
+
+    va_start(args, format);
+    len += vsnprintf(buffer + len, sizeof(buffer) - len, format, args);
+    va_end(args);
+
+    logbuf_print(&app.log, buffer);
+    fwrite(buffer, len, 1, stdout);
+}
+
+void rg_system_write_log(log_buffer_t *log, FILE *fp)
+{
+    assert(log && fp);
+    for (size_t i = 0; i < LOG_BUFFER_SIZE; i++)
+    {
+        size_t index = (log->cursor + i) % LOG_BUFFER_SIZE;
+        if (log->buffer[index])
+            fputc(log->buffer[index], fp);
+    }
 }
 
 void rg_system_halt()
@@ -710,8 +741,9 @@ IRAM_ATTR void rg_spi_lock_release(spi_lock_res_t owner)
 #endif
 }
 
-/* Memory */
-
+// Note: You should use calloc/malloc everywhere possible. This function is used to ensure
+// that some memory is put in specific regions for performance or hardware reasons.
+// Memory from this function should be freed with free()
 void *rg_alloc(size_t size, uint32_t mem_type)
 {
     uint32_t caps = 0;
@@ -744,9 +776,4 @@ void *rg_alloc(size_t size, uint32_t mem_type)
     }
 
     return ptr;
-}
-
-void rg_free(void *ptr)
-{
-    return heap_caps_free(ptr);
 }
