@@ -806,6 +806,7 @@ int rg_gui_about_menu(const dialog_option_t *extra_options)
         timeInfo->tm_year += 1900;
         
         rg_gui_draw_time(*timeInfo, rg_settings_get_int32(SETTING_RTC_FORMAT, 0), rg_settings_get_int32(SETTING_RTC_MONTH_TXT, 0), rg_settings_get_int32(SETTING_RTC_HOUR_PREF, 0), false);
+    }
 
     char *rel_hash = strstr(build_ver, "-0-g");
     if (rel_hash)
