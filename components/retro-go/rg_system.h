@@ -10,15 +10,20 @@ extern "C" {
 #include <stdint.h>
 #include <stdio.h>
 
-#include "config.h"
+#if defined(RG_TARGET_ODROID_GO) || 1
+    #include "targets/odroid-go.h"
+#else
+    #error "Target device not defined"
+#endif
 
 #include "rg_audio.h"
 #include "rg_display.h"
 #include "rg_input.h"
 #include "rg_netplay.h"
-#include "rg_vfs.h"
+#include "rg_sdcard.h"
 #include "rg_image.h"
 #include "rg_gui.h"
+#include "rg_i2c.h"
 #include "rg_profiler.h"
 #include "rg_settings.h"
 #include "rg_cheats.h"
@@ -51,7 +56,6 @@ typedef enum
     RG_PATH_SAVE_STATE_3,
     RG_PATH_SCREENSHOT,
     RG_PATH_SAVE_SRAM,
-    RG_PATH_TEMP_FILE,
     RG_PATH_ROM_FILE,
     RG_PATH_ART_FILE,
 } rg_path_type_t;
@@ -73,6 +77,9 @@ enum {
 };
 
 #define RG_STRUCT_MAGIC 0x12345678
+
+#define RG_APP_LAUNCHER "launcher"
+#define RG_APP_FACTORY  NULL
 
 typedef bool (*rg_state_handler_t)(const char *filename);
 typedef bool (*rg_reset_handler_t)(bool hard);
@@ -156,7 +163,7 @@ void rg_system_set_led(int value);
 int  rg_system_get_led(void);
 void rg_system_tick(bool skippedFrame, bool fullFrame, int busyTime);
 void rg_system_log(int level, const char *context, const char *format, ...);
-void rg_system_write_log(log_buffer_t *log, FILE *fp);
+bool rg_system_save_trace(const char *filename, bool append);
 rg_app_desc_t *rg_system_get_app();
 runtime_stats_t rg_system_get_stats();
 
@@ -168,7 +175,7 @@ bool rg_emu_save_state(int slot);
 bool rg_emu_load_state(int slot);
 bool rg_emu_reset(int hard);
 bool rg_emu_notify(int msg, void *arg);
-bool rg_emu_screenshot(const char *file, int width, int height);
+bool rg_emu_screenshot(const char *filename, int width, int height);
 void rg_emu_start_game(const char *emulator, const char *romPath, rg_start_action_t action);
 
 int32_t rg_system_get_startup_app(void);

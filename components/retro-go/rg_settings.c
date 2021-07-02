@@ -1,4 +1,5 @@
 #include <esp_err.h>
+#include <unistd.h>
 #include <string.h>
 #include <stdio.h>
 #include <cJSON.h>
@@ -6,9 +7,9 @@
 #include "rg_system.h"
 #include "rg_settings.h"
 
-#define USE_CONFIG_FILE 1
+#define USE_CONFIG_FILE (RG_DRIVER_SETTINGS == 1)
 
-#define CONFIG_FILE_PATH "/sd/odroid/retro-go.json"
+#define CONFIG_FILE_PATH RG_BASE_PATH_CONFIG "/retro-go.json"
 #define CONFIG_NAMESPACE "retro-go"
 #define CONFIG_NVS_STORE "config"
 #define CONFIG_VERSION    0x01
@@ -61,7 +62,7 @@ static void json_set(cJSON *root, const char *key, cJSON *value)
 void rg_settings_init(const char *app_name)
 {
     char *buffer = NULL;
-    char *source;
+    const char *source;
     size_t length = 0;
 
 #if USE_CONFIG_FILE
@@ -75,7 +76,7 @@ void rg_settings_init(const char *app_name)
         fread(buffer, 1, length, fp);
         fclose(fp);
     }
-    source = "SD Card";
+    source = "sdcard";
 #else
     if (nvs_flash_init() != ESP_OK)
     {
@@ -102,11 +103,11 @@ void rg_settings_init(const char *app_name)
 
     if (root)
     {
-        RG_LOGI("Config loaded from %s!\n", source);
+        RG_LOGI("Settings ready. source=%s\n", source);
     }
     else
     {
-        RG_LOGE("Config failed to load from %s!\n", source);
+        RG_LOGE("Failed to initialize settings. source=%s!\n", source);
         root = cJSON_CreateObject();
     }
 
@@ -148,7 +149,7 @@ bool rg_settings_save(void)
     if (!fp)
     {
         // Sometimes the FAT is left in an inconsistent state and this might help
-        rg_vfs_delete(CONFIG_FILE_PATH);
+        unlink(CONFIG_FILE_PATH);
         fp = fopen(CONFIG_FILE_PATH, "wb");
     }
     if (fp)

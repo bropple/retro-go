@@ -12,8 +12,8 @@
 #define IMAGE_BANNER_WIDTH  (272)
 #define IMAGE_BANNER_HEIGHT (32)
 
-#define LIST_WIDTH          (RG_SCREEN_WIDTH)
-#define LIST_HEIGHT         (RG_SCREEN_HEIGHT - LIST_Y_OFFSET)
+#define LIST_WIDTH          (gui.width)
+#define LIST_HEIGHT         (gui.height - LIST_Y_OFFSET)
 #define LIST_LINE_COUNT     (LIST_HEIGHT / rg_gui_get_font_info().height)
 #define LIST_X_OFFSET       (0)
 #define LIST_Y_OFFSET       (48 + 8)
@@ -42,6 +42,26 @@ const int gui_themes_count = sizeof(gui_themes) / sizeof(theme_t);
 
 retro_gui_t gui;
 
+#define CONCAT(a, b) ({char buffer[128]; strcat(strcpy(buffer, a), b);})
+#define SETTING_SELECTED_TAB    "SelectedTab"
+#define SETTING_GUI_THEME       "ColorTheme"
+#define SETTING_SHOW_PREVIEW    "ShowPreview"
+#define SETTING_PREVIEW_SPEED   "PreviewSpeed"
+#define SETTING_TAB_ENABLED(a)   CONCAT("TabEnabled.", a)
+#define SETTING_TAB_SELECTION(a) CONCAT("TabSelection.", a)
+
+
+void gui_init(void)
+{
+    memset(&gui, 0, sizeof(retro_gui_t));
+    gui.selected     = rg_settings_get_app_int32(SETTING_SELECTED_TAB, 0);
+    gui.theme        = rg_settings_get_app_int32(SETTING_GUI_THEME, 0);
+    gui.show_preview = rg_settings_get_app_int32(SETTING_SHOW_PREVIEW, 1);
+    gui.show_preview_fast = rg_settings_get_app_int32(SETTING_PREVIEW_SPEED, 0);
+    gui.width = rg_display_get_status()->screen.width;
+    gui.height = rg_display_get_status()->screen.height;
+    rg_display_clear(C_BLACK);
+}
 
 void gui_event(gui_event_t event, tab_t *tab)
 {
@@ -60,8 +80,11 @@ tab_t *gui_add_tab(const char *name, const rg_image_t *logo, const rg_image_t *h
     tab->img_header = header;
     tab->img_logo = logo;
     tab->initialized = false;
+    tab->enabled = rg_settings_get_app_int32(SETTING_TAB_ENABLED(tab->name), 1);
     tab->is_empty = false;
     tab->arg = arg;
+    tab->listbox.sort_mode = SORT_TEXT_ASC;
+    tab->listbox.cursor = -1;
 
     gui.tabs[gui.tabcount++] = tab;
 
@@ -78,13 +101,32 @@ void gui_init_tab(tab_t *tab)
     tab->initialized = true;
     // tab->status[0] = 0;
 
-    char key_name[32];
-    sprintf(key_name, "Sel.%.11s", tab->name);
-    tab->listbox.cursor = rg_settings_get_app_int32(key_name, 0);
-
     gui_event(TAB_INIT, tab);
 
-    tab->listbox.cursor = RG_MAX(RG_MIN(tab->listbox.cursor, tab->listbox.length - 1), 0);
+    if (!tab->is_empty)
+    {
+        gui_sort_list(tab);
+
+        // -1 means that we should find our last saved position
+        if (tab->listbox.cursor == -1)
+        {
+            tab->listbox.cursor = 0;
+            char *selected = rg_settings_get_app_string(SETTING_TAB_SELECTION(tab->name), NULL);
+            if (selected && strlen(selected) > 1)
+            {
+                for (int i = 0; i < tab->listbox.length; i++)
+                {
+                    if (strcmp(selected, tab->listbox.items[i].text) == 0)
+                    {
+                        tab->listbox.cursor = i;
+                        break;
+                    }
+                }
+            }
+            free(selected);
+        }
+    }
+
     gui_event(TAB_SCROLL, tab);
 }
 
@@ -123,11 +165,28 @@ void gui_set_status(tab_t *tab, const char *left, const char *right)
 void gui_save_position(bool commit)
 {
     tab_t *tab = gui_get_current_tab();
-    char key_name[32];
-    sprintf(key_name, "Sel.%.11s", tab->name);
-    rg_settings_set_app_int32(key_name, tab->listbox.cursor);
-    rg_settings_set_app_int32("SelectedTab", gui.selected);
-    if (commit) rg_settings_save();
+    listbox_item_t *item = gui_get_selected_item(tab);
+
+    rg_settings_set_app_string(SETTING_TAB_SELECTION(tab->name), item ? item->text : "");
+    rg_settings_set_app_int32(SETTING_SELECTED_TAB, gui.selected);
+
+    if (commit)
+        rg_settings_save();
+}
+
+void gui_save_config(bool commit)
+{
+    rg_settings_set_app_int32(SETTING_SHOW_PREVIEW, gui.show_preview);
+    rg_settings_set_app_int32(SETTING_PREVIEW_SPEED, gui.show_preview_fast);
+    rg_settings_set_app_int32(SETTING_GUI_THEME, gui.theme);
+
+    for (int i = 0; i < gui.tabcount; i++)
+    {
+        rg_settings_set_app_int32(SETTING_TAB_ENABLED(gui.tabs[i]->name), gui.tabs[i]->enabled);
+    }
+
+    if (commit)
+        rg_settings_save();
 }
 
 listbox_item_t *gui_get_selected_item(tab_t *tab)
@@ -140,17 +199,38 @@ listbox_item_t *gui_get_selected_item(tab_t *tab)
     return NULL;
 }
 
-static int list_comparator(const void *p, const void *q)
+static int list_comp_text_asc(const void *a, const void *b)
 {
-    return strcasecmp(((listbox_item_t*)p)->text, ((listbox_item_t*)q)->text);
+    return strcasecmp(((listbox_item_t*)a)->text, ((listbox_item_t*)b)->text);
 }
 
-void gui_sort_list(tab_t *tab, int sort_mode)
+static int list_comp_text_desc(const void *a, const void *b)
 {
-    if (tab->listbox.length == 0)
+    return strcasecmp(((listbox_item_t*)b)->text, ((listbox_item_t*)a)->text);
+}
+
+static int list_comp_id_asc(const void *a, const void *b)
+{
+    return ((listbox_item_t*)a)->id - ((listbox_item_t*)b)->id;
+}
+
+static int list_comp_id_desc(const void *a, const void *b)
+{
+    return ((listbox_item_t*)b)->id - ((listbox_item_t*)a)->id;
+}
+
+void gui_sort_list(tab_t *tab)
+{
+    void *comp[] = {&list_comp_id_asc, &list_comp_id_desc, &list_comp_text_asc, &list_comp_text_desc};
+    int sort_mode = tab->listbox.sort_mode - 1;
+
+    if (tab->is_empty || !tab->listbox.length)
         return;
 
-    qsort((void*)tab->listbox.items, tab->listbox.length, sizeof(listbox_item_t), list_comparator);
+    if (sort_mode < 0 || sort_mode > 3)
+        return;
+
+    qsort((void*)tab->listbox.items, tab->listbox.length, sizeof(listbox_item_t), comp[sort_mode]);
 }
 
 void gui_resize_list(tab_t *tab, int new_size)
@@ -173,7 +253,9 @@ void gui_resize_list(tab_t *tab, int new_size)
     }
 
     tab->listbox.length = new_size;
-    tab->listbox.cursor = RG_MAX(RG_MIN(tab->listbox.cursor, new_size - 1), 0);
+
+    if (tab->listbox.cursor >= new_size)
+        tab->listbox.cursor = new_size - 1;
 
     gui_event(TAB_SCROLL, tab);
 
@@ -254,8 +336,8 @@ void gui_draw_header(tab_t *tab)
     int x_pos = IMAGE_LOGO_WIDTH;
     int y_pos = IMAGE_LOGO_HEIGHT;
 
-    rg_gui_draw_fill_rect(x_pos, 0, RG_SCREEN_WIDTH - x_pos, LIST_Y_OFFSET, C_BLACK);
-    rg_gui_draw_fill_rect(0, y_pos, RG_SCREEN_WIDTH, LIST_Y_OFFSET - y_pos, C_BLACK);
+    rg_gui_draw_fill_rect(x_pos, 0, gui.width - x_pos, LIST_Y_OFFSET, C_BLACK);
+    rg_gui_draw_fill_rect(0, y_pos, gui.width, LIST_Y_OFFSET - y_pos, C_BLACK);
 
     if (tab->img_logo)
         rg_gui_draw_image(0, 0, IMAGE_LOGO_WIDTH, IMAGE_LOGO_HEIGHT, tab->img_logo);
@@ -276,7 +358,7 @@ void gui_draw_status(tab_t *tab)
     char *txt_right = tab->status[tab->status[1].right[0] ? 1 : 0].right;
 
     rg_gui_draw_battery(-27, 3);
-    rg_gui_draw_text(status_x, status_y, RG_SCREEN_WIDTH, txt_right, C_SNOW, C_BLACK, RG_TEXT_ALIGN_LEFT);
+    rg_gui_draw_text(status_x, status_y, gui.width, txt_right, C_SNOW, C_BLACK, RG_TEXT_ALIGN_LEFT);
     rg_gui_draw_text(status_x, status_y, 0, txt_left, C_WHITE, C_BLACK, RG_TEXT_ALIGN_RIGHT);
 }
 
@@ -290,6 +372,7 @@ void gui_draw_list(tab_t *tab)
 
     int lines = LIST_LINE_COUNT;
     int y = LIST_Y_OFFSET;
+    int y_max = y + LIST_HEIGHT;
 
     for (int i = 0; i < lines; i++)
     {
@@ -307,8 +390,8 @@ void gui_draw_list(tab_t *tab)
         y += rg_gui_draw_text(LIST_X_OFFSET, y, LIST_WIDTH, text_label, color_fg, color_bg, 0).height;
     }
 
-    if (y < RG_SCREEN_HEIGHT)
-        rg_gui_draw_fill_rect(0, y, LIST_WIDTH, RG_SCREEN_HEIGHT - y, color_bg);
+    if (y < y_max)
+        rg_gui_draw_fill_rect(0, y, LIST_WIDTH, y_max - y, color_bg);
 }
 
 void gui_draw_preview(tab_t *tab, retro_emulator_file_t *file)
@@ -378,7 +461,7 @@ void gui_draw_preview(tab_t *tab, retro_emulator_file_t *file)
         else
             continue;
 
-        if (rg_vfs_filesize(path) > 0)
+        if (access(path, F_OK) == 0)
         {
             img = rg_image_load_from_file(path, 0);
             if (!img)

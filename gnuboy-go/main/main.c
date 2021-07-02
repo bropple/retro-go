@@ -206,7 +206,7 @@ static void screen_blit(void)
 
     // swap buffers
     currentUpdate = previousUpdate;
-    fb.ptr = currentUpdate->buffer;
+    fb.buffer = currentUpdate->buffer;
 }
 
 static void auto_sram_update(void)
@@ -248,9 +248,8 @@ void app_main(void)
     autoSaveSRAM = rg_settings_get_app_int32(SETTING_SAVESRAM, 0);
     sramFile = rg_emu_get_path(RG_PATH_SAVE_SRAM, 0);
 
-    char *dirname = rg_vfs_dirname(sramFile);
-    rg_vfs_mkdir(dirname);
-    free(dirname);
+    if (!rg_mkdir(rg_dirname(sramFile)))
+        RG_LOGW("Unable to create SRAM folder...");
 
     // Load ROM
     rom_load(app->romPath);
@@ -259,22 +258,21 @@ void app_main(void)
     pal_set_dmg(rg_settings_get_app_int32(SETTING_PALETTE, 0));
 
     // Video
-    memset(&fb, 0, sizeof(fb));
-    fb.w = currentUpdate->width;
-    fb.h = currentUpdate->height;
-    fb.pitch = currentUpdate->stride;
-    fb.ptr = currentUpdate->buffer;
-    fb.format = GB_PIXEL_565_BE;
-    fb.enabled = 1;
-    fb.blit_func = &screen_blit;
+    fb = (fb_t) {
+        .buffer = currentUpdate->buffer,
+        .format = GB_PIXEL_565_BE,
+        .enabled = 1,
+        .blit_func = &screen_blit,
+    };
 
     // Audio
-    memset(&pcm, 0, sizeof(pcm));
-    pcm.hz = AUDIO_SAMPLE_RATE;
-    pcm.stereo = 1;
-    pcm.len = AUDIO_BUFFER_LENGTH * 2; // count of 16bit samples (x2 for stereo)
-    pcm.buf = (n16 *)&audioBuffer;
-    pcm.pos = 0;
+    pcm = (pcm_t) {
+        .hz = AUDIO_SAMPLE_RATE,
+        .stereo = 1,
+        .len = AUDIO_BUFFER_LENGTH * 2, // count of 16bit samples (x2 for stereo)
+        .buf = (n16 *)&audioBuffer,
+        .pos = 0,
+    };
 
     emu_init();
 
