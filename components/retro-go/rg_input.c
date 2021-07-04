@@ -7,16 +7,18 @@
 
 #include "rg_system.h"
 #include "rg_input.h"
+#include "rg_i2c.h"
 
 static bool input_initialized = false;
-static bool use_external_gamepad = false;
 static int64_t last_gamepad_read = 0;
 static gamepad_state_t gamepad_state;
 
 
-static inline uint32_t console_gamepad_read(void)
+static inline uint32_t gamepad_read(void)
 {
     uint32_t state = 0;
+
+#if RG_DRIVER_GAMEPAD == 1    // GPIO
 
     int joyX = adc1_get_raw(RG_GPIO_GAMEPAD_X);
     int joyY = adc1_get_raw(RG_GPIO_GAMEPAD_Y);
@@ -33,18 +35,17 @@ static inline uint32_t console_gamepad_read(void)
     if (!gpio_get_level(RG_GPIO_GAMEPAD_A))      state |= GAMEPAD_KEY_A;
     if (!gpio_get_level(RG_GPIO_GAMEPAD_B))      state |= GAMEPAD_KEY_B;
 
-    return state;
-}
+#elif RG_DRIVER_GAMEPAD == 2  // Serial
 
-static inline uint32_t external_gamepad_read(void)
-{
-    uint32_t state = 0;
+#elif RG_DRIVER_GAMEPAD == 3  // I2C
 
-    // Unfortunately the GO doesn't bring out enough GPIO for both ext DAC and controller...
-    if (rg_audio_get_sink() != RG_AUDIO_SINK_EXT_DAC)
+    uint8_t data[5];
+    if (rg_i2c_read(0x20, -1, &data, 5))
     {
-        // NES / SNES shift register
+        // ...
     }
+
+#endif
 
     return state;
 }
@@ -60,12 +61,7 @@ static void input_task(void *arg)
 
     while (input_initialized)
     {
-        uint32_t state = console_gamepad_read();
-
-        if (use_external_gamepad)
-        {
-            state |= external_gamepad_read();
-        }
+        uint32_t state = gamepad_read();
 
         for (int i = 0; i < GAMEPAD_KEY_COUNT; ++i)
         {
@@ -93,10 +89,9 @@ static void input_task(void *arg)
 void rg_input_init(void)
 {
     if (input_initialized)
-    {
-        RG_LOGE("Input already initialized...\n");
         return;
-    }
+
+#if RG_DRIVER_GAMEPAD == 1    // GPIO
 
     adc1_config_width(ADC_WIDTH_12Bit);
     adc1_config_channel_atten(RG_GPIO_GAMEPAD_X, ADC_ATTEN_11db);
@@ -117,16 +112,29 @@ void rg_input_init(void)
     gpio_set_direction(RG_GPIO_GAMEPAD_B, GPIO_MODE_INPUT);
     gpio_set_pull_mode(RG_GPIO_GAMEPAD_B, GPIO_PULLUP_ONLY);
 
+#elif RG_DRIVER_GAMEPAD == 2  // Serial
+
+    gpio_set_direction(RG_GPIO_GAMEPAD_CLOCK, GPIO_MODE_OUTPUT);
+    gpio_set_direction(RG_GPIO_GAMEPAD_LATCH, GPIO_MODE_OUTPUT);
+    gpio_set_direction(RG_GPIO_GAMEPAD_DATA, GPIO_MODE_INPUT);
+
+#elif RG_DRIVER_GAMEPAD == 3  // I2C
+
+    rg_i2c_init();
+
+#endif
+
     // Start background polling
     xTaskCreatePinnedToCore(&input_task, "input_task", 1024, NULL, 5, NULL, 1);
 
     input_initialized = true;
 
-      RG_LOGI("init done.\n");
+    RG_LOGI("Input ready.\n");
 }
 
 void rg_input_deinit(void)
 {
+    RG_LOGI("Input terminated.\n");
     input_initialized = false;
 }
 
@@ -175,7 +183,7 @@ battery_state_t rg_input_read_battery()
 
     for (int i = 0; i < sampleCount; ++i)
     {
-        adcSample += esp_adc_cal_raw_to_voltage(adc1_get_raw(ADC1_CHANNEL_0), &adc_chars) * 0.001f;
+        adcSample += esp_adc_cal_raw_to_voltage(adc1_get_raw(RG_BATT_ADC_CHAN), &adc_chars) * 0.001f;
     }
     adcSample /= sampleCount;
 
@@ -189,13 +197,8 @@ battery_state_t rg_input_read_battery()
         adcValue /= 2.0f;
     }
 
-    const float Vs = (adcValue / RG_BATT_DIVIDER_R2 * (RG_BATT_DIVIDER_R1 + RG_BATT_DIVIDER_R2));
-    const float Vconst = RG_MAX(RG_BATT_VOLTAGE_EMPTY, RG_MIN(Vs, RG_BATT_VOLTAGE_FULL));
-
-    battery_state_t out_state = {
-        .millivolts = (int)(Vs * 1000),
-        .percentage = (int)((Vconst - RG_BATT_VOLTAGE_EMPTY) / (RG_BATT_VOLTAGE_FULL - RG_BATT_VOLTAGE_EMPTY) * 100.0f),
+    return (battery_state_t) {
+        .millivolts = (int)(RG_BATT_CALC_VOLTAGE(adcValue) * 1000),
+        .percentage = (int)(RG_BATT_CALC_PERCENT(adcValue)),
     };
-
-    return out_state;
 }

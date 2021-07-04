@@ -163,15 +163,14 @@ When starting new Pokemon games, you will still have to set the time at the begi
 
 
 # Future plans / Feature requests
-- SNES emulation (In progress)
 - Cheats support (In progress)
 - Famicom Disk System (In progress)
-- Netplay (On hold)
+- SNES emulation (Stalled)
+- Netplay (Stalled)
 - Multiple save states
 - Atari 2600 or 5200 or 7800
 - Neo Geo Pocket Color
 - Folders support
-- Recently played games
 - Game Boy BIOS
 - Chip sound player
 - Sleep mode
@@ -181,9 +180,9 @@ When starting new Pokemon games, you will still have to set the time at the begi
 # Building Retro-Go
 
 ## Prerequisites
-You will need a working installation of [esp-idf](https://docs.espressif.com/projects/esp-idf/en/v4.0.2/) version 3.3.4 or 4.0.2. The legacy (make) build system isn't supported, only idf/cmake.
+You will need a working installation of esp-idf [4.1.x](https://docs.espressif.com/projects/esp-idf/en/v4.1/) or [4.0.2](https://docs.espressif.com/projects/esp-idf/en/v4.0.2/) and only the CMake build system is supported.
 
-_Note: Other esp-idf versions will work (>=3.3.3) but I cannot provide help for them. Many are known to have problems: for example 3.3.0, 4.0.0, and 4.1.* have broken sound (broken i2s driver) and 4.2 and 4.3 have broken SD Card support. If you can make retro-go work with 4.1 or 4.2 then please send me a pull request :)._
+_Note: Other esp-idf versions may work (>=3.3.3) but I cannot provide help for them. Many are known to have problems: for example 3.3.0 and 4.0.0 have broken sound driver and 4.2 and 4.3 have broken SD Card support. If you can make retro-go work with 4.2 or 4.3 then please send me a pull request :)._
 
 ### ESP-IDF Patches
 Retro-Go will build and most likely run without any changes to esp-idf, but patches do provide significant advantages. The patches are located in `tools/patches`. Here's the list:
@@ -229,7 +228,7 @@ I don't want to maintain non-ESP32 ports in this repository but let me know if I
 - PCE cover art is from Christian_Haitian.
 - DS3231M libraries originally from [ESP-IDF lib](https://github.com/UncleRus/esp-idf-lib).
 - DS3231M retro-go integration by [Ben Ropple](https://github.com/bropple) ([micro](https://forum.odroid.com/memberlist.php?mode=viewprofile&u=40859)).
-
+- Some icons from [Rokey](https://iconarchive.com/show/seed-icons-by-rokey.html)
 
 # License
 Everything in this project is licensed under the [GPLv2 license](COPYING) with the exception of the following components:

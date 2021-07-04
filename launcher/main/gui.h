@@ -29,6 +29,14 @@ typedef enum {
 } scroll_mode_t;
 
 typedef enum {
+    SORT_NONE,
+    SORT_ID_ASC,
+    SORT_ID_DESC,
+    SORT_TEXT_ASC,
+    SORT_TEXT_DESC,
+} sort_mode_t;
+
+typedef enum {
     PREVIEW_MODE_NONE = 0,
     PREVIEW_MODE_COVER_SAVE,
     PREVIEW_MODE_SAVE_COVER,
@@ -62,6 +70,7 @@ typedef struct {
     listbox_item_t *items;
     int length;
     int cursor;
+    int sort_mode;
 } listbox_t;
 
 typedef void (*gui_event_handler_t)(gui_event_t event, void *arg);
@@ -76,6 +85,7 @@ typedef struct tab_s {
     const rg_image_t *img_header;
     bool initialized;
     bool is_empty;
+    bool enabled;
     void *arg;
     listbox_t listbox;
     gui_event_handler_t event_handler;
@@ -86,11 +96,12 @@ typedef struct {
     int tabcount;
     int selected;
     int theme;
-    int show_empty;
     int show_preview;
     int show_preview_fast;
     int idle_counter;
     int last_key;
+    int width;
+    int height;
     gamepad_state_t joystick;
     bool rtc_enable;
     int rtc_format;
@@ -109,12 +120,14 @@ tab_t *gui_set_current_tab(int index);
 void gui_set_status(tab_t *tab, const char *left, const char *right);
 void gui_init_tab(tab_t *tab);
 
-void gui_sort_list(tab_t *tab, int sort_mode);
+void gui_sort_list(tab_t *tab);
 void gui_scroll_list(tab_t *tab, scroll_mode_t mode, int arg);
 void gui_resize_list(tab_t *tab, int new_size);
 listbox_item_t *gui_get_selected_item(tab_t *tab);
 
+void gui_init(void);
 void gui_save_position(bool commit);
+void gui_save_config(bool commit);
 void gui_event(gui_event_t event, tab_t *tab);
 void gui_redraw(void);
 void gui_draw_navbar(void);
